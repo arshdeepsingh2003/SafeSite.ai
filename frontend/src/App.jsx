@@ -1,122 +1,99 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+// ============================================================
+// SafeSite AI — App Router  (Phase 9 — Groq LLM + Reports)
+// File: frontend/src/App.jsx
+// ============================================================
 
-function App() {
-  const [count, setCount] = useState(0)
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster }        from 'react-hot-toast'
+import { AuthProvider }   from './context/AuthContext'
+import { AlertProvider }  from './context/AlertContext'
+import { SoundProvider }  from './context/SoundContext'
+import { SocketProvider } from './context/SocketContext'
+import ProtectedRoute     from './components/layout/ProtectedRoute'
+import AppLayout          from './components/layout/AppLayout'
 
+// Pages
+import LoginPage          from './components/pages/LoginPage'
+import DashboardPage      from './components/pages/DashboardPage'
+import VideoUploadPage    from './components/pages/VideoUploadPage'
+import LiveMonitoringPage from './components/pages/LiveMonitoringPage'
+import AlertsPage         from './components/pages/AlertsPage'
+import ReportsPage        from './components/pages/ReportsPage'      // Phase 9
+import SettingsPage       from './components/pages/SettingsPage'
+
+const Placeholder = ({ title, phase }) => (
+  <div style={{ padding: '20px' }}>
+    <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#e6edf3', marginBottom: '8px' }}>{title}</h1>
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: '8px',
+      padding: '6px 14px', marginBottom: '16px',
+      background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+      borderRadius: '20px', fontSize: '12px', color: '#3b82f6',
+    }}>🔜 Coming in Phase {phase}</div>
+    <p style={{ color: '#8b949e', fontSize: '14px' }}>
+      This page will be built in Phase {phase}.
+    </p>
+  </div>
+)
+
+export default function App() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    // Provider order:
+    //   Auth   → knows if logged in
+    //   Alert  → polls unread count (needs auth)
+    //   Sound  → manages sound toggle (independent)
+    //   Socket → connects WS, plays sounds on events (needs all above)
+    <AuthProvider>
+      <AlertProvider>
+        <SoundProvider>
+          <SocketProvider>
+            <BrowserRouter>
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  duration: 4000,
+                  style: {
+                    background:   '#1f2937',
+                    color:        '#e6edf3',
+                    border:       '1px solid #30363d',
+                    borderRadius: '10px',
+                    fontSize:     '14px',
+                  },
+                  success: { iconTheme: { primary: '#22c55e', secondary: '#fff' } },
+                  error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+                }}
+              />
 
-      <div className="ticks"></div>
+              <Routes>
+                {/* Public */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/"      element={<Navigate to="/dashboard" replace />} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
+                {/* Protected */}
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
                 >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+                  <Route path="/dashboard"       element={<DashboardPage />} />
+                  <Route path="/live-monitoring" element={<LiveMonitoringPage />} />
+                  <Route path="/video-upload"    element={<VideoUploadPage />} />
+                  <Route path="/alerts"          element={<AlertsPage />} />
+                  <Route path="/settings"        element={<SettingsPage />} />   {/* ← Phase 7 ✅ */}
+                  <Route path="/analytics"       element={<Placeholder title="📈 Analytics" phase="11" />} />
+                  <Route path="/reports"         element={<ReportsPage />} />  {/* ← Phase 9 ✅ */}
+                  <Route path="/sites"           element={<Placeholder title="🏗️ Sites"     phase="10" />} />
+                  <Route path="/workers"         element={<Placeholder title="👷 Workers"   phase="10" />} />
+                </Route>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </SocketProvider>
+        </SoundProvider>
+      </AlertProvider>
+    </AuthProvider>
   )
 }
-
-export default App
