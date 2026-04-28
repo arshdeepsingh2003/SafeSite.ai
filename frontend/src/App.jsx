@@ -15,8 +15,8 @@ import AppLayout          from './components/layout/AppLayout'
 // Pages
 import LoginPage          from './components/pages/LoginPage'
 import DashboardPage      from './components/pages/DashboardPage'
-// import VideoUploadPage    from './components/pages/VideoUploadPage'    // Missing: VideoUploadPage.jsx not implemented yet
-// import LiveMonitoringPage from './components/pages/LiveMonitoringPage' // Missing: LiveMonitoringPage.jsx not implemented yet
+import VideoUploadPage    from './components/pages/VideoUploadPage'    // Missing: VideoUploadPage.jsx not implemented yet
+import LiveMonitoringPage from './components/pages/LiveMonitoringPage' // Missing: LiveMonitoringPage.jsx not implemented yet
 // import AlertsPage         from './components/pages/AlertsPage'         // Missing: AlertsPage.jsx not implemented yet
 // import ReportsPage        from './components/pages/ReportsPage'        // Missing: ReportsPage.jsx not implemented yet
 // import SettingsPage       from './components/pages/SettingsPage'       // Missing: SettingsPage.jsx not implemented yet
@@ -83,9 +83,9 @@ export default function App() {
                 >
                   <Route path="/dashboard"       element={<DashboardPage />} />
                   {/* Missing page components - comment out until implemented */}
-                  {/*
                   <Route path="/live-monitoring" element={<LiveMonitoringPage />} />
                   <Route path="/video-upload"    element={<VideoUploadPage />} />
+                  {/*
                   <Route path="/alerts"          element={<AlertsPage />} />
                   <Route path="/settings"        element={<SettingsPage />} />
                   <Route path="/reports"         element={<ReportsPage />} />
