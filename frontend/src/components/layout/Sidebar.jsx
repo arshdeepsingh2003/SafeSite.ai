@@ -5,24 +5,26 @@
 
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth }         from '../../context/AuthContext'
-import { useAlertContext } from '../../context/AlertContext'
+// import { useAlertContext } from '../../context/AlertContext'  // Missing: AlertContext.jsx not implemented yet
 import toast from 'react-hot-toast'
 
 export default function Sidebar() {
   const { user, logout }   = useAuth()
-  const { unreadCount }    = useAlertContext()
+  // const { unreadCount }    = useAlertContext()  // Missing: AlertContext.jsx not implemented yet
+  const unreadCount = 0  // Placeholder value since AlertContext is not available
   const navigate           = useNavigate()
 
   const navItems = [
     { path: '/dashboard',       icon: '📊', label: 'Dashboard'       },
-    { path: '/live-monitoring', icon: '📹', label: 'Live Monitoring'  },
-    { path: '/video-upload',    icon: '🎬', label: 'Video Upload'     },
-    { path: '/alerts',          icon: '🚨', label: 'Alerts', badge: unreadCount },
-    { path: '/analytics',       icon: '📈', label: 'Analytics'        },
-    { path: '/reports',         icon: '📄', label: 'Reports'          },
-    { path: '/sites',           icon: '🏗️',  label: 'Sites'           },
-    { path: '/workers',         icon: '👷', label: 'Workers'          },
-    { path: '/settings',        icon: '⚙️',  label: 'Settings'        },
+    // Pages not implemented yet - uncomment when available
+    // { path: '/live-monitoring', icon: '📹', label: 'Live Monitoring'  },  // Missing: LiveMonitoringPage.jsx
+    // { path: '/video-upload',    icon: '🎬', label: 'Video Upload'     },  // Missing: VideoUploadPage.jsx
+    // { path: '/alerts',          icon: '🚨', label: 'Alerts', badge: unreadCount },  // Missing: AlertsPage.jsx
+    // { path: '/analytics',       icon: '📈', label: 'Analytics'        },  // Missing: Analytics page
+    // { path: '/reports',         icon: '📄', label: 'Reports'          },  // Missing: ReportsPage.jsx
+    // { path: '/sites',           icon: '🏗️',  label: 'Sites'           },  // Missing: Sites page
+    // { path: '/workers',         icon: '👷', label: 'Workers'          },  // Missing: Workers page
+    // { path: '/settings',        icon: '⚙️',  label: 'Settings'        },  // Missing: SettingsPage.jsx
   ]
 
   const handleLogout = () => {

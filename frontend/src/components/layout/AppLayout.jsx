@@ -16,9 +16,9 @@ const PAGE_TITLES = {
 }
 
 export default function AppLayout() {
-  const { user }     = useAuth()
-  const location     = useLocation()
-  const pageTitle    = PAGE_TITLES[location.pathname] || 'SafeSite AI'
+  const { user, logout } = useAuth()
+  const location         = useLocation()
+  const pageTitle        = PAGE_TITLES[location.pathname] || 'SafeSite AI'
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -99,7 +99,7 @@ export default function AppLayout() {
               }}>3</span>
             </button>
 
-            {/* User avatar + name */}
+            {/* User avatar + name + logout */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{
                 width:          '32px',
@@ -117,6 +117,24 @@ export default function AppLayout() {
                 </div>
                 <div style={{ fontSize: '11px', color: '#8b949e' }}>Site Manager</div>
               </div>
+              <button
+                onClick={logout}
+                title="Logout"
+                style={{
+                  marginLeft:     '8px',
+                  background:     'rgba(239,68,68,0.1)',
+                  border:         '1px solid rgba(239,68,68,0.3)',
+                  borderRadius:   '6px',
+                  padding:        '4px 10px',
+                  cursor:         'pointer',
+                  color:          '#ef4444',
+                  fontSize:       '11px',
+                  fontWeight:     '600',
+                  lineHeight:     1,
+                }}
+              >
+                🚪 Logout
+              </button>
             </div>
 
           </div>

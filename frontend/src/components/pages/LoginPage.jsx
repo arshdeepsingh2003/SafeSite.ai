@@ -4,8 +4,8 @@ import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@safesite.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
   const { login } = useAuth()
@@ -98,12 +98,12 @@ export default function LoginPage() {
               }}>
                 Email Address
               </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="admin@safesite.com"
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="email@example.com"
                 style={{
                   width: '100%', padding: '11px 14px',
                   background: 'var(--bg-primary)',
@@ -125,12 +125,12 @@ export default function LoginPage() {
               }}>
                 Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Password"
                 style={{
                   width: '100%', padding: '11px 14px',
                   background: 'var(--bg-primary)',
@@ -161,18 +161,6 @@ export default function LoginPage() {
               {loading ? '⏳ Signing in...' : '🔐 Sign In'}
             </button>
           </form>
-
-          {/* Demo credentials hint */}
-          <div style={{
-            marginTop: '20px', padding: '12px',
-            background: 'rgba(59,130,246,0.08)',
-            border: '1px solid rgba(59,130,246,0.2)',
-            borderRadius: '8px', fontSize: '12px', color: '#8b949e',
-          }}>
-            <strong style={{ color: '#3b82f6' }}>Demo Credentials:</strong><br />
-            Email: admin@safesite.com<br />
-            Password: admin123
-          </div>
         </div>
 
         <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: '#8b949e' }}>

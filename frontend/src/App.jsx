@@ -6,21 +6,22 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster }        from 'react-hot-toast'
 import { AuthProvider }   from './context/AuthContext'
-import { AlertProvider }  from './context/AlertContext'
-import { SoundProvider }  from './context/SoundContext'
-import { SocketProvider } from './context/SocketContext'
+// import { AlertProvider }  from './context/AlertContext'  // Missing: AlertContext.jsx not implemented yet
+// import { SoundProvider }  from './context/SoundContext'   // Missing: SoundContext.jsx not implemented yet
+// import { SocketProvider } from './context/SocketContext'  // Missing: SocketContext.jsx not implemented yet
 import ProtectedRoute     from './components/layout/ProtectedRoute'
 import AppLayout          from './components/layout/AppLayout'
 
 // Pages
 import LoginPage          from './components/pages/LoginPage'
 import DashboardPage      from './components/pages/DashboardPage'
-import VideoUploadPage    from './components/pages/VideoUploadPage'
-import LiveMonitoringPage from './components/pages/LiveMonitoringPage'
-import AlertsPage         from './components/pages/AlertsPage'
-import ReportsPage        from './components/pages/ReportsPage'      // Phase 9
-import SettingsPage       from './components/pages/SettingsPage'
+// import VideoUploadPage    from './components/pages/VideoUploadPage'    // Missing: VideoUploadPage.jsx not implemented yet
+// import LiveMonitoringPage from './components/pages/LiveMonitoringPage' // Missing: LiveMonitoringPage.jsx not implemented yet
+// import AlertsPage         from './components/pages/AlertsPage'         // Missing: AlertsPage.jsx not implemented yet
+// import ReportsPage        from './components/pages/ReportsPage'        // Missing: ReportsPage.jsx not implemented yet
+// import SettingsPage       from './components/pages/SettingsPage'       // Missing: SettingsPage.jsx not implemented yet
 
+/*
 const Placeholder = ({ title, phase }) => (
   <div style={{ padding: '20px' }}>
     <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#e6edf3', marginBottom: '8px' }}>{title}</h1>
@@ -35,6 +36,7 @@ const Placeholder = ({ title, phase }) => (
     </p>
   </div>
 )
+*/
 
 export default function App() {
   return (
@@ -44,9 +46,11 @@ export default function App() {
     //   Sound  → manages sound toggle (independent)
     //   Socket → connects WS, plays sounds on events (needs all above)
     <AuthProvider>
+      {/* Missing providers - comment out until implemented
       <AlertProvider>
         <SoundProvider>
           <SocketProvider>
+          */}
             <BrowserRouter>
               <Toaster
                 position="top-right"
@@ -78,22 +82,33 @@ export default function App() {
                   }
                 >
                   <Route path="/dashboard"       element={<DashboardPage />} />
+                  {/* Missing page components - comment out until implemented */}
+                  {/*
                   <Route path="/live-monitoring" element={<LiveMonitoringPage />} />
                   <Route path="/video-upload"    element={<VideoUploadPage />} />
                   <Route path="/alerts"          element={<AlertsPage />} />
-                  <Route path="/settings"        element={<SettingsPage />} />   {/* ← Phase 7 ✅ */}
+                  <Route path="/settings"        element={<SettingsPage />} />
+                  <Route path="/reports"         element={<ReportsPage />} />
+                  */}
+                  {/* Phase 11 - Analytics page not implemented yet */}
+                  {/*
                   <Route path="/analytics"       element={<Placeholder title="📈 Analytics" phase="11" />} />
-                  <Route path="/reports"         element={<ReportsPage />} />  {/* ← Phase 9 ✅ */}
+                  */}
+                  {/* Phase 10 - Sites and Workers pages not implemented yet */}
+                  {/*
                   <Route path="/sites"           element={<Placeholder title="🏗️ Sites"     phase="10" />} />
                   <Route path="/workers"         element={<Placeholder title="👷 Workers"   phase="10" />} />
+                  */}
                 </Route>
 
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </BrowserRouter>
+          {/* 
           </SocketProvider>
         </SoundProvider>
       </AlertProvider>
+      */}
     </AuthProvider>
   )
 }

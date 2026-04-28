@@ -1,13 +1,8 @@
-# ============================================================
-# SafeSite AI — Create Default Admin User
-# This creates the first admin account so you can log in.
-# Run this ONCE after setting up the database.
-# ============================================================
 
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
 
@@ -26,14 +21,14 @@ async def create_admin():
 
     # --- Default admin credentials ---
     # Change these before going to production!
-    admin_email = "admin@safesite.com"
-    admin_password = "admin123"
-    admin_name = "Site Admin"
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+    admin_name = os.getenv("ADMIN_NAME", "Admin")
 
     # Check if admin already exists
     existing = await users.find_one({"email": admin_email})
     if existing:
-        print(f"⚠️  Admin already exists: {admin_email}")
+        print(f"⚠️  Admin already exists")
         print("    If you forgot the password, delete the user from MongoDB and run this again.")
         client.close()
         return
@@ -45,7 +40,7 @@ async def create_admin():
         "hashed_password": pwd_context.hash(admin_password),
         "role": "admin",
         "is_active": True,
-        "created_at": datetime.now(UTC)
+        "created_at": datetime.now(timezone.utc)
     }
 
     result = await users.insert_one(admin_doc)
@@ -53,14 +48,7 @@ async def create_admin():
     print("=" * 50)
     print("✅ Admin user created successfully!")
     print("=" * 50)
-    print(f"   Email:    {admin_email}")
-    print(f"   Password: {admin_password}")
-    print(f"   Role:     admin")
-    print(f"   ID:       {result.inserted_id}")
-    print("=" * 50)
-    print("⚠️  Remember to change the password after first login!")
-    print("=" * 50)
-
+    
     client.close()
 
 
