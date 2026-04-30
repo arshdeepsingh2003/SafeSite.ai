@@ -15,7 +15,7 @@ import AppLayout          from './components/layout/AppLayout'
 // Pages
 import LoginPage          from './components/pages/LoginPage'
 import DashboardPage      from './components/pages/DashboardPage'
-import VideoUploadPage    from './components/pages/VideoUploadPage'    // Missing: VideoUploadPage.jsx not implemented yet
+import VideoUploadPage    from './components/pages/VideoUploadPage'
 import LiveMonitoringPage from './components/pages/LiveMonitoringPage' // Missing: LiveMonitoringPage.jsx not implemented yet
 // import AlertsPage         from './components/pages/AlertsPage'         // Missing: AlertsPage.jsx not implemented yet
 // import ReportsPage        from './components/pages/ReportsPage'        // Missing: ReportsPage.jsx not implemented yet

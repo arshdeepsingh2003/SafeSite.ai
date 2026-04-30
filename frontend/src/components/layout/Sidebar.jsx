@@ -18,7 +18,7 @@ export default function Sidebar() {
     { path: '/dashboard',       icon: '📊', label: 'Dashboard'       },
     // Pages not implemented yet - uncomment when available
     { path: '/live-monitoring', icon: '📹', label: 'Live Monitoring'  },  // Missing: LiveMonitoringPage.jsx
-    { path: '/video-upload',    icon: '🎬', label: 'Video Upload'     },  // Missing: VideoUploadPage.jsx
+    { path: '/video-upload',    icon: '🎬', label: 'Video Upload'     },
     // { path: '/alerts',          icon: '🚨', label: 'Alerts', badge: unreadCount },  // Missing: AlertsPage.jsx
     // { path: '/analytics',       icon: '📈', label: 'Analytics'        },  // Missing: Analytics page
     // { path: '/reports',         icon: '📄', label: 'Reports'          },  // Missing: ReportsPage.jsx

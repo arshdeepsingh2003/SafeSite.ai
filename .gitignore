@@ -1,52 +1,34 @@
-# Python
+# ============================================================
+# SafeSite AI — .gitignore
+# Prevents secrets and large files from being committed to Git
+# ============================================================
+
+# ── Python ──
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-*.egg-info/
-*.egg
-*.egg-info
-dist/
-build/
-*.egg-info/
+*.pyo
 venv/
-env/
-ENV/
 .env
-*.sqlite
-*.db
-*.pyc
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+*.egg-info/
 dist/
 build/
-.vite/
 
-# IDE
+# ── Node / React ──
+node_modules/
+dist/
+.DS_Store
+
+# ── Uploaded videos (can be huge!) ──
+backend/uploads/
+
+# ── AI model weights (downloaded automatically) ──
+ai-service/model/*.pt
+ai-service/model/*.pth
+
+# ── IDE ──
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
-.DS_Store
 
-# Logs
-logs/
+# ── Logs ──
 *.log
-
-# React
-frontend/dist/
-
-# Python backend
-backend/__pycache__/
-backend/*.pyc
-backend/.env
-
-# OS
-Thumbs.db
-Desktop.ini
