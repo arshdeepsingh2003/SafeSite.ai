@@ -176,7 +176,7 @@ export default function LiveMonitoringPage() {
                   border: 'none', borderRadius: '7px',
                   color: 'white', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
                 }}
-              >Change Camera ▾</button>
+              >Add live stream link ▾</button>
             </div>
           </div>
 
