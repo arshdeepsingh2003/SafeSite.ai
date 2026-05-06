@@ -47,7 +47,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 async def startup():
     await connect_db()
     asyncio.create_task(_heartbeat())
-    print("SafeSite AI v13.0 -- Analytics active")
+    print("🚀 SafeSite AI v13.0 — Analytics active")
     print("   REST:      http://localhost:8000/docs")
     print("   WebSocket: ws://localhost:8000/socket.io/")
 

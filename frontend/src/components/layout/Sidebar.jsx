@@ -5,26 +5,24 @@
 
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth }         from '../../context/AuthContext'
-// import { useAlertContext } from '../../context/AlertContext'  // Missing: AlertContext.jsx not implemented yet
+import { useAlertContext } from '../../context/AlertContext'
 import toast from 'react-hot-toast'
 
 export default function Sidebar() {
   const { user, logout }   = useAuth()
-  // const { unreadCount }    = useAlertContext()  // Missing: AlertContext.jsx not implemented yet
-  const unreadCount = 0  // Placeholder value since AlertContext is not available
+  const { unreadCount }    = useAlertContext()
   const navigate           = useNavigate()
 
   const navItems = [
     { path: '/dashboard',       icon: '📊', label: 'Dashboard'       },
-    // Pages not implemented yet - uncomment when available
-    { path: '/live-monitoring', icon: '📹', label: 'Live Monitoring'  },  // Missing: LiveMonitoringPage.jsx
+    { path: '/live-monitoring', icon: '📹', label: 'Live Monitoring'  },
     { path: '/video-upload',    icon: '🎬', label: 'Video Upload'     },
-    // { path: '/alerts',          icon: '🚨', label: 'Alerts', badge: unreadCount },  // Missing: AlertsPage.jsx
-    // { path: '/analytics',       icon: '📈', label: 'Analytics'        },  // Missing: Analytics page
-    // { path: '/reports',         icon: '📄', label: 'Reports'          },  // Missing: ReportsPage.jsx
-    // { path: '/sites',           icon: '🏗️',  label: 'Sites'           },  // Missing: Sites page
-    // { path: '/workers',         icon: '👷', label: 'Workers'          },  // Missing: Workers page
-    // { path: '/settings',        icon: '⚙️',  label: 'Settings'        },  // Missing: SettingsPage.jsx
+    { path: '/alerts',          icon: '🚨', label: 'Alerts', badge: unreadCount },
+    { path: '/analytics',       icon: '📈', label: 'Analytics'        },
+    { path: '/reports',         icon: '📄', label: 'Reports'          },
+    { path: '/sites',           icon: '🏗️',  label: 'Sites'           },
+    { path: '/workers',         icon: '👷', label: 'Workers'          },
+    { path: '/settings',        icon: '⚙️',  label: 'Settings'        },
   ]
 
   const handleLogout = () => {
@@ -78,32 +76,35 @@ export default function Sidebar() {
               color:      isActive ? '#ffffff' : '#8b949e',
               background: isActive ? 'var(--accent-blue)' : 'transparent',
               transition: 'all 0.15s',
-              position: 'relative',
             })}
+            onMouseEnter={e => {
+              if (!e.currentTarget.classList.contains('active')) {
+                e.currentTarget.style.background = 'var(--bg-hover)';
+                e.currentTarget.style.color = '#e6edf3';
+              }
+            }}
+            onMouseLeave={e => {
+              if (!e.currentTarget.classList.contains('active')) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#8b949e';
+              }
+            }}
           >
-            {({ isActive }) => (
-              <>
-                {/* Nav item background hover handled by CSS-in-JS approach below */}
-                <HoverNavItem isActive={isActive}>
-                  <span style={{ fontSize: '16px' }}>{item.icon}</span>
-                  <span style={{ flex: 1 }}>{item.label}</span>
-                  {/* Live badge — only shown when there are unread alerts */}
-                  {item.badge > 0 && (
-                    <span style={{
-                      minWidth: '18px', height: '18px',
-                      background: '#ef4444',
-                      borderRadius: '9px',
-                      fontSize: '10px', fontWeight: '700',
-                      color: 'white',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      padding: '0 4px',
-                      animation: 'badgePulse 2s ease-in-out infinite',
-                    }}>
-                      {item.badge > 99 ? '99+' : item.badge}
-                    </span>
-                  )}
-                </HoverNavItem>
-              </>
+            <span style={{ fontSize: '16px' }}>{item.icon}</span>
+            <span style={{ flex: 1 }}>{item.label}</span>
+            {item.badge > 0 && (
+              <span style={{
+                minWidth: '18px', height: '18px',
+                background: '#ef4444',
+                borderRadius: '9px',
+                fontSize: '10px', fontWeight: '700',
+                color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 4px',
+                animation: 'badgePulse 2s ease-in-out infinite',
+              }}>
+                {item.badge > 99 ? '99+' : item.badge}
+              </span>
             )}
           </NavLink>
         ))}

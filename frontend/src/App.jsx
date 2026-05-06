@@ -6,7 +6,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster }        from 'react-hot-toast'
 import { AuthProvider }   from './context/AuthContext'
-// import { AlertProvider }  from './context/AlertContext'  // Missing: AlertContext.jsx not implemented yet
+import { AlertProvider }  from './context/AlertContext'
 // import { SoundProvider }  from './context/SoundContext'   // Missing: SoundContext.jsx not implemented yet
 // import { SocketProvider } from './context/SocketContext'  // Missing: SocketContext.jsx not implemented yet
 import ProtectedRoute     from './components/layout/ProtectedRoute'
@@ -17,7 +17,7 @@ import LoginPage          from './components/pages/LoginPage'
 import DashboardPage      from './components/pages/DashboardPage'
 import VideoUploadPage    from './components/pages/VideoUploadPage'
 import LiveMonitoringPage from './components/pages/LiveMonitoringPage' // Missing: LiveMonitoringPage.jsx not implemented yet
-// import AlertsPage         from './components/pages/AlertsPage'         // Missing: AlertsPage.jsx not implemented yet
+import AlertsPage         from './components/pages/AlertsPage'
 // import ReportsPage        from './components/pages/ReportsPage'        // Missing: ReportsPage.jsx not implemented yet
 // import SettingsPage       from './components/pages/SettingsPage'       // Missing: SettingsPage.jsx not implemented yet
 
@@ -46,11 +46,7 @@ export default function App() {
     //   Sound  → manages sound toggle (independent)
     //   Socket → connects WS, plays sounds on events (needs all above)
     <AuthProvider>
-      {/* Missing providers - comment out until implemented
       <AlertProvider>
-        <SoundProvider>
-          <SocketProvider>
-          */}
             <BrowserRouter>
               <Toaster
                 position="top-right"
@@ -85,8 +81,8 @@ export default function App() {
                   {/* Missing page components - comment out until implemented */}
                   <Route path="/live-monitoring" element={<LiveMonitoringPage />} />
                   <Route path="/video-upload"    element={<VideoUploadPage />} />
-                  {/*
                   <Route path="/alerts"          element={<AlertsPage />} />
+                  {/*
                   <Route path="/settings"        element={<SettingsPage />} />
                   <Route path="/reports"         element={<ReportsPage />} />
                   */}
@@ -104,11 +100,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </BrowserRouter>
-          {/* 
-          </SocketProvider>
-        </SoundProvider>
       </AlertProvider>
-      */}
     </AuthProvider>
   )
 }

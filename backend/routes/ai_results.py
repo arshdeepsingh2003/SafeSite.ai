@@ -15,7 +15,7 @@ import subprocess, os, sys
 
 router = APIRouter(prefix="/ai", tags=["AI Detection"])
 
-AI_SERVICE_DIR = os.path.join(os.path.dirname(__file__), "../../ai-service")
+AI_SERVICE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../ai-service"))
 
 
 # ── POST /ai/results/{video_id} ──────────────────────────────
@@ -112,11 +112,11 @@ async def trigger_analysis(video_id: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Cannot analyze live streams via upload. Use live monitoring.")
 
     file_path = video.get("file_path")
+    # Convert to absolute path if relative (video.py stores relative to backend)
+    if file_path and not os.path.isabs(file_path):
+        file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", file_path))
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Video file not found on disk.")
-
-    # Convert to absolute path so detect.py can find it regardless of working directory
-    file_path = os.path.abspath(file_path)
 
     # Mark as processing immediately
     await db["videos"].update_one(
@@ -145,6 +145,22 @@ async def _run_detection_subprocess(file_path: str, video_id: str, zone: str):
     detect_script = os.path.join(AI_SERVICE_DIR, "detect.py")
     python_exe    = sys.executable
 
+    # Verify files exist before running
+    if not os.path.exists(file_path):
+        print(f"❌ Video file not found: {file_path}")
+        await db["videos"].update_one(
+            {"_id": ObjectId(video_id)},
+            {"$set": {"status": "error", "error_message": f"Video file not found: {file_path}"}}
+        )
+        return
+    if not os.path.exists(detect_script):
+        print(f"❌ detect.py not found: {detect_script}")
+        await db["videos"].update_one(
+            {"_id": ObjectId(video_id)},
+            {"$set": {"status": "error", "error_message": f"detect.py not found at {detect_script}"}}
+        )
+        return
+
     cmd = [
         python_exe, detect_script,
         "--video",    file_path,
@@ -152,25 +168,24 @@ async def _run_detection_subprocess(file_path: str, video_id: str, zone: str):
         "--zone",     zone,
     ]
 
+    print(f"🚀 Running detect.py for video {video_id}")
+    print(f"   Command: {' '.join(cmd)}")
+    print(f"   Working dir: {AI_SERVICE_DIR}")
+
     try:
-        # Run from the ai-service directory so .env is loaded correctly
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            errors='ignore',
-            timeout=600,
-            cwd=AI_SERVICE_DIR  # Set working directory to ai-service
-        )
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, cwd=AI_SERVICE_DIR)
         if proc.returncode != 0:
-            print(f"❌ detect.py error:\n{proc.stderr}")
+            error_msg = proc.stderr[-1000:] if proc.stderr else "Unknown error (no stderr)"
+            print(f"❌ detect.py failed with return code {proc.returncode}")
+            print(f"   stderr: {error_msg}")
             await db["videos"].update_one(
                 {"_id": ObjectId(video_id)},
-                {"$set": {"status": "error", "error_message": proc.stderr[-500:]}}
+                {"$set": {"status": "error", "error_message": error_msg}}
             )
         else:
-            print(f"✅ detect.py finished for video {video_id}")
+            print(f"✅ detect.py finished successfully for video {video_id}")
+            if proc.stdout:
+                print(f"   Output: {proc.stdout[-500:]}")
     except subprocess.TimeoutExpired:
         print(f"⏰ detect.py timed out for {video_id}")
         await db["videos"].update_one(
