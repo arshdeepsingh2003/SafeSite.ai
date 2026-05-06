@@ -23,12 +23,12 @@ async def connect_db():
     """Test the database connection on startup."""
     try:
         await client.admin.command("ping")
-        print("✅ Connected to MongoDB successfully!")
+        print("Connected to MongoDB successfully!")
     except Exception as e:
-        print(f"❌ MongoDB connection failed: {e}")
+        print(f"MongoDB connection failed: {e}")
         print("   Make sure MongoDB is running: sudo systemctl start mongod")
 
 async def close_db():
     """Close the database connection on shutdown."""
     client.close()
-    print("🔌 MongoDB connection closed.")
+    print("MongoDB connection closed.")

@@ -10,6 +10,26 @@ const api = axios.create({
   },
 })
 
+// --- Request interceptor ---
+// Automatically attach JWT token to all requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('safesite_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    // Debug: log the full URL being called
+    console.log('API Request:', {
+      baseURL: config.baseURL,
+      url: config.url,
+      fullURL: `${config.baseURL}${config.url}`,
+      method: config.method
+    })
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
 // --- Response interceptor ---
 // If any request returns 401 (unauthorized), redirect to login
 api.interceptors.response.use(

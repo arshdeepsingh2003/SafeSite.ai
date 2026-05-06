@@ -58,24 +58,24 @@ function PreviousItem({ video, onDelete, onAnalyze, analyzing }) {
           <StatusBadge status={video.status} />
 
           {/* Show Analyze button only for uploaded (not stream, not yet analyzed) */}
-          {video.type !== 'stream' && video.status === 'uploaded' && (
-            <button
-              onClick={() => onAnalyze(video._id)}
-              disabled={isProcessing}
-              style={{
-                padding: '2px 8px',
-                background: 'rgba(99,102,241,0.15)',
-                border: '1px solid rgba(99,102,241,0.4)',
-                borderRadius: '6px', color: '#818cf8',
-                fontSize: '11px', cursor: 'pointer', fontWeight: '600',
-              }}
-            >
-              {isProcessing ? '⏳ Analyzing…' : '🤖 Analyze'}
-            </button>
-          )}
+           {video.type !== 'stream' && video.status === 'uploaded' && (
+             <button
+               onClick={() => onAnalyze(video.id)}
+               disabled={isProcessing}
+               style={{
+                 padding: '2px 8px',
+                 background: 'rgba(99,102,241,0.15)',
+                 border: '1px solid rgba(99,102,241,0.4)',
+                 borderRadius: '6px', color: '#818cf8',
+                 fontSize: '11px', cursor: 'pointer', fontWeight: '600',
+               }}
+             >
+               {isProcessing ? '⏳ Analyzing…' : '🤖 Analyze'}
+             </button>
+           )}
 
-          <button
-            onClick={() => onDelete(video._id, video.original_name || 'this video')}
+           <button
+             onClick={() => onDelete(video.id, video.original_name || 'this video')}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: '#8b949e', fontSize: '12px', padding: '0 2px',
@@ -164,8 +164,8 @@ export default function VideoUploadPage() {
         </h1>
       </div>
 
-      {/* 3-column grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 300px', gap: '20px', alignItems: 'start' }}>
+        {/* 3-column grid */}
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', alignItems: 'start' }}>
 
         {/* ── LEFT: Upload controls ── */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
@@ -316,10 +316,10 @@ export default function VideoUploadPage() {
 
           {/* Analysis result card — appears when AI finishes */}
           {lastResult && (
-            <AnalysisResultCard
-              summary={lastResult}
-              videoName={videos.find(v => v._id === lastUploadId)?.original_name}
-            />
+             <AnalysisResultCard
+               summary={lastResult}
+               videoName={videos.find(v => v.id === lastUploadId)?.original_name}
+             />
           )}
         </div>
 
@@ -403,62 +403,6 @@ export default function VideoUploadPage() {
             </div>
           </div>
 
-          {/* How it works */}
-          <div style={{
-            padding: '16px', background: 'var(--bg-primary)',
-            borderRadius: '8px', border: '1px solid var(--border)',
-          }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#e6edf3', marginBottom: '12px' }}>
-              🤖 How AI Detection Works
-            </div>
-            {[
-              { step: '1', text: 'Video is split into frames by OpenCV' },
-              { step: '2', text: 'Every 5th frame is sent to YOLOv8' },
-              { step: '3', text: 'Persons, helmets & vests are detected' },
-              { step: '4', text: 'PPE is matched to each worker' },
-              { step: '5', text: 'Violations are classified by severity' },
-              { step: '6', text: 'Bounding boxes are drawn on output video' },
-            ].map(item => (
-              <div key={item.step} style={{
-                display: 'flex', alignItems: 'flex-start', gap: '10px',
-                marginBottom: '8px', fontSize: '12px', color: '#8b949e',
-              }}>
-                <div style={{
-                  width: '20px', height: '20px', flexShrink: 0,
-                  background: 'rgba(99,102,241,0.2)',
-                  border: '1px solid rgba(99,102,241,0.4)',
-                  borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '10px', fontWeight: '700', color: '#818cf8',
-                }}>{item.step}</div>
-                <span style={{ paddingTop: '2px' }}>{item.text}</span>
-              </div>
-            ))}
-
-            {/* Compliance rules */}
-            <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#e6edf3', marginBottom: '8px' }}>
-                Compliance Rules
-              </div>
-              {[
-                { rule: 'No Helmet → Violation',          color: '#f97316', sev: 'Medium' },
-                { rule: 'No Vest → Violation',             color: '#eab308', sev: 'Medium' },
-                { rule: 'No Helmet & No Vest → High Risk', color: '#ef4444', sev: 'High' },
-              ].map(item => (
-                <div key={item.rule} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  marginBottom: '5px', fontSize: '12px',
-                }}>
-                  <span style={{ color: item.color }}>• {item.rule}</span>
-                  <span style={{
-                    fontSize: '10px', fontWeight: '600', padding: '2px 6px',
-                    background: `${item.color}20`, color: item.color,
-                    borderRadius: '8px',
-                  }}>{item.sev}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* ── RIGHT: Previous Analyses ── */}
@@ -478,15 +422,15 @@ export default function VideoUploadPage() {
               No videos uploaded yet.<br />Upload your first video!
             </div>
           ) : (
-            videos.slice(0, 8).map(v => (
-              <PreviousItem
-                key={v._id}
-                video={v}
-                onDelete={deleteVideo}
-                onAnalyze={startAnalysis}
-                analyzing={analysisStatus[v._id] === 'processing'}
-              />
-            ))
+             videos.slice(0, 8).map(v => (
+               <PreviousItem
+                 key={v.id}
+                 video={v}
+                 onDelete={deleteVideo}
+                 onAnalyze={startAnalysis}
+                 analyzing={analysisStatus[v.id] === 'processing'}
+               />
+             ))
           )}
 
           {/* Tips */}
