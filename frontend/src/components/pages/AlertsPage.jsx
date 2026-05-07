@@ -139,12 +139,17 @@ export default function AlertsPage() {
     }
   }, [filterZone, filterSeverity, filterStatus, filterViolation, page])
 
+  // Only poll if user is logged in (token exists)
+  const token = localStorage.getItem('safesite_token')
+
   // Load on mount and every 15 seconds
   useEffect(() => {
+    if (!token) return // Don't poll if not authenticated
+
     fetchAlerts()
     const interval = setInterval(fetchAlerts, 15000)
     return () => clearInterval(interval)
-  }, [fetchAlerts])
+  }, [fetchAlerts, token])
 
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1) }, [filterZone, filterSeverity, filterStatus, filterViolation])

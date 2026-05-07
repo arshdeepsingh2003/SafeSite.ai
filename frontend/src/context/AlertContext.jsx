@@ -18,6 +18,9 @@ export function AlertProvider({ children }) {
 
   // Fetch the number of "new" (unread) alerts
   const refreshCount = useCallback(async () => {
+    const token = localStorage.getItem('safesite_token')
+    if (!token) return // Don't fetch if not logged in
+
     try {
       // GET /alerts?status=new&limit=1 — we only need the total count
       const res = await api.get('/alerts?status=new&limit=1')

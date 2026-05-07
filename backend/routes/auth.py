@@ -5,11 +5,14 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 
 from database import users_collection
 
-load_dotenv()
+# Explicitly load .env from backend directory
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 

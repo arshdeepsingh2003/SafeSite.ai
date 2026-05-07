@@ -4,10 +4,13 @@ from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
+from pathlib import Path
 import os
- 
-load_dotenv()
- 
+
+# Explicitly load .env from backend directory
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
 # --- Settings from .env ---
 SECRET_KEY = os.getenv("SECRET_KEY", "change_this_secret_key")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")

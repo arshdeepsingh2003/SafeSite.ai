@@ -31,12 +31,12 @@ api.interceptors.request.use(
 )
 
 // --- Response interceptor ---
-// If any request returns 401 (unauthorized), redirect to login
+// If any request returns 401 (unauthorized), redirect to login (only if not already there)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid — clear storage and reload
+    if (error.response?.status === 401 && !window.location.pathname.includes('/login')) {
+      // Token expired or invalid — clear storage and redirect
       localStorage.removeItem('safesite_token')
       localStorage.removeItem('safesite_user')
       window.location.href = '/login'
