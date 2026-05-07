@@ -204,28 +204,3 @@ async def live_detection(sid, data):
                 })
     except Exception as e:
         pass   # Never let alert creation crash the socket handler
-
-
-# ── live_detection ─────────────────────────────────────────────
-# Fired by live_detect.py. Forwarded to all browser clients.
-@sio.event
-async def live_detection(sid, data):
-    """Forward AI detections to all connected browser clients."""
-    await sio.emit("live_detection", data, skip_sid=sid)
-    try:
-        from services.alert_service import create_alert
-        for det in data.get("detections", []):
-            if det.get("severity") in ("medium", "high"):
-                await create_alert({
-                    "worker_id":      det.get("worker_id", 0),
-                    "zone":           data.get("zone", "Zone A"),
-                    "camera":         data.get("camera", "Camera 1"),
-                    "violation_type": det.get("violation", "unknown"),
-                    "severity":       det.get("severity", "medium"),
-                    "has_helmet":     det.get("has_helmet", False),
-                    "has_vest":       det.get("has_vest", False),
-                    "source":         "live_stream",
-                    "frame_number":   data.get("frame"),
-                })
-    except Exception:
-        pass

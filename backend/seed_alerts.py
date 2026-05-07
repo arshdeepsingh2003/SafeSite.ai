@@ -6,7 +6,7 @@ import random, os
 
 load_dotenv()
 
-MONGODB_URL   = os.getenv("MONGO_URL")
+MONGO_URL   = os.getenv("MONGO_URL")
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 
 ZONES    = ["Zone A", "Zone B", "Zone C", "Zone D"]
@@ -19,9 +19,8 @@ VIOLATIONS = [
     {"type": "no_helmet_and_no_vest", "severity": "high",   "has_helmet": False, "has_vest": False},
 ]
 
-
 async def seed():
-    client = AsyncIOMotorClient(MONGODB_URL)
+    client = AsyncIOMotorClient(MONGO_URL)
     db     = client[DATABASE_NAME]
     col    = db["alerts"]
 
@@ -69,11 +68,9 @@ async def seed():
         await col.insert_one(doc)
         created += 1
 
-    print(f"✅ Seeded {created} sample alerts!")
+    print(f"Seeded {created} sample alerts!")
     print(f"   Now run the frontend and visit /alerts to see them.")
-
     client.close()
-
 
 if __name__ == "__main__":
     asyncio.run(seed())

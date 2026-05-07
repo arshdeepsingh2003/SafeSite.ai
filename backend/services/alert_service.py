@@ -87,8 +87,9 @@ async def create_alert(alert_data: dict) -> dict | None:
     # ── Phase 8: Send email for HIGH severity ─────────────────
     if severity == "high":
         try:
-            from services.email_service import send_high_alert_email
-            email_sent = await send_high_alert_email(doc)
+            # from services.email_service import send_high_alert_email  # FILE NOT FOUND
+            # email_sent = await send_high_alert_email(doc)
+            print("⚠️  Email service not implemented yet")
             # Mark email_sent in the document
             if email_sent:
                 await alerts_collection.update_one(

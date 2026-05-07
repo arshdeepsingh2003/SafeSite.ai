@@ -1,20 +1,11 @@
+
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
-// import socket from '../services/socket'  // FILE NOT FOUND - services/socket.js does not exist
+import socket from '../services/socket'
 import { useAuth }         from './AuthContext'
 import { useAlertContext } from './AlertContext'
-// import { useSoundSettings } from './SoundContext'  // FILE NOT FOUND
-// import { playAlarm, playBeep, playSuccess } from '../services/soundService'  // FILE NOT FOUND
-
-// Mock socket object to prevent crashes - socket.js file not found
-const socket = {
-  connect: () => {},
-  disconnect: () => {},
-  on: () => {},
-  off: () => {},
-  emit: () => {},
-  connected: false,
-}
+import { useSoundSettings } from './SoundContext'
+import { playAlarm, playBeep, playSuccess } from '../services/soundService'
 
 const SocketContext = createContext(null)
 
@@ -30,7 +21,7 @@ export function SocketProvider({ children }) {
   const [lastAlert,   setLastAlert]   = useState(null)
   const { isLoggedIn }                = useAuth()
   const { refreshCount }              = useAlertContext()
-  // const { soundEnabled, highOnly }    = useSoundSettings()  // FILE NOT FOUND
+  const { soundEnabled, highOnly }    = useSoundSettings()
 
   // ── Toast cooldown tracker ────────────────────────────────
   // Key: "worker_id:zone:violation_type" → timestamp of last toast
@@ -54,14 +45,14 @@ export function SocketProvider({ children }) {
     refreshCount()
 
     // ── Sound logic ───────────────────────────────────────
-    // if (soundEnabled) {  // soundService missing
-    //   const isHigh = data.severity === 'high'
-    //   if (isHigh) {
-    //     playAlarm()                        // 3-tone descending klaxon
-    //   } else if (!highOnly) {
-    //     playBeep()                         // Single soft beep
-    //   }
-    // }
+    if (soundEnabled) {
+      const isHigh = data.severity === 'high'
+      if (isHigh) {
+        playAlarm()                        // 3-tone descending klaxon
+      } else if (!highOnly) {
+        playBeep()                         // Single soft beep
+      }
+    }
 
     // ── Toast cooldown check ──────────────────────────────
     if (isToastCoolingDown(data)) return
@@ -169,14 +160,14 @@ export function SocketProvider({ children }) {
         position: 'top-right',
       }
     )
-  }, [refreshCount])  // removed soundEnabled, highOnly deps
+  }, [refreshCount, soundEnabled, highOnly])
 
   // ── Handle alert_resolved ─────────────────────────────────
-  // const handleAlertResolved = useCallback((data) => {
-  //   console.log('✅ alert_resolved received:', data)
-  //   refreshCount()
-  //   if (soundEnabled) playSuccess()
-  // }, [refreshCount, soundEnabled])
+  const handleAlertResolved = useCallback((data) => {
+    console.log('✅ alert_resolved received:', data)
+    refreshCount()
+    if (soundEnabled) playSuccess()
+  }, [refreshCount, soundEnabled])
 
   // ── Connect / disconnect with login state ─────────────────
   useEffect(() => {
@@ -185,7 +176,7 @@ export function SocketProvider({ children }) {
       socket.on('connect',        () => setIsConnected(true))
       socket.on('disconnect',     () => setIsConnected(false))
       socket.on('new_alert',      handleNewAlert)
-      // socket.on('alert_resolved', handleAlertResolved)  // handleAlertResolved is commented out
+      socket.on('alert_resolved', handleAlertResolved)
       socket.on('connect', () => socket.emit('join_room', { room: 'all' }))
     } else {
       socket.disconnect()
@@ -196,9 +187,9 @@ export function SocketProvider({ children }) {
       socket.off('connect')
       socket.off('disconnect')
       socket.off('new_alert',      handleNewAlert)
-      // socket.off('alert_resolved', handleAlertResolved)  // handleAlertResolved is commented out
+      socket.off('alert_resolved', handleAlertResolved)
     }
-  }, [isLoggedIn, handleNewAlert])  // removed handleAlertResolved dep
+  }, [isLoggedIn, handleNewAlert, handleAlertResolved])
 
   return (
     <SocketContext.Provider value={{ isConnected, socket, lastAlert }}>
