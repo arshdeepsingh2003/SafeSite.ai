@@ -41,11 +41,13 @@ async def receive_ai_results(video_id: str, results: dict):
         raise HTTPException(status_code=404, detail="Video not found")
 
     # 1. Update video to completed
+    # Strip frame_results before storing — huge and not needed by the frontend
+    stored_results = {k: v for k, v in results.items() if k != "frame_results"}
     await db["videos"].update_one(
         {"_id": oid},
         {"$set": {
             "status": "completed",
-            "analysis_result": results,
+            "analysis_result": stored_results,
             "analyzed_at": datetime.utcnow(),
         }}
     )
@@ -56,8 +58,11 @@ async def receive_ai_results(video_id: str, results: dict):
     zone          = results.get("zone", "Zone A")
     alerts_created = 0
 
+    print(f"📥 Received {len(violations)} violation(s) from AI analysis")
     for v in violations:
-        severity = v.get("severity", "medium")
+        vtype = v.get("violation", "")
+        severity = v.get("severity", "high" if vtype == "no_helmet_and_no_vest" else "medium")
+        print(f"   → violation={vtype} severity={severity} worker={v.get('worker_id')}")
         if severity not in ("medium", "high"):
             continue  # Skip "safe" detections
 

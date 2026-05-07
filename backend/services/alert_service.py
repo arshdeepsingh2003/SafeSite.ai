@@ -1,3 +1,11 @@
+# ============================================================
+# SafeSite AI — Alert Service  (Phase 8 — Email integrated)
+# File: backend/services/alert_service.py
+#
+# Phase 8 change: create_alert() now calls send_high_alert_email()
+# automatically when severity == "high".
+# ============================================================
+
 from database import alerts_collection, db
 from datetime import datetime, timedelta
 from bson import ObjectId
@@ -84,12 +92,14 @@ async def create_alert(alert_data: dict) -> dict | None:
     except Exception as e:
         print(f"⚠️  Socket emit failed (alert still saved): {e}")
 
-    # ── Phase 8: Send email for HIGH severity ─────────────────
-    if severity == "high":
+    # ── Phase 8: Send email for all violations ─────────────────
+    print(f"📧 create_alert: severity={severity} | violation={violation_type} | zone={zone}")
+    if severity in ("medium", "high"):
         try:
-            # from services.email_service import send_high_alert_email  # FILE NOT FOUND
-            # email_sent = await send_high_alert_email(doc)
-            print("⚠️  Email service not implemented yet")
+            from services.email_service import send_high_alert_email
+            print(f"📧 Attempting to send email for alert (severity={severity})...")
+            email_sent = await send_high_alert_email(doc)
+            print(f"📧 Email send result: {email_sent}")
             # Mark email_sent in the document
             if email_sent:
                 await alerts_collection.update_one(

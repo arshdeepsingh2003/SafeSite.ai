@@ -233,9 +233,11 @@ def _check_violation_confirmation(stable_id, frame_number):
             if compliant_frames >= VIOLATION_END_FRAMES:
                 # End the violation event and add to events list
                 viol = _active_violations.pop(stable_id)
+                sev = "high" if viol['type'] == VIOLATION_NO_HELMET_VEST else "medium"
                 _violation_events.append({
                     'worker_id': stable_id,
                     'type': viol['type'],
+                    'severity': sev,
                     'start_frame': viol['start_frame'],
                     'end_frame': frame_number,
                 })
@@ -355,9 +357,11 @@ def get_violation_events(end_frame=None):
 
     # Also include active violations that haven't ended yet
     for stable_id, viol in _active_violations.items():
+        sev = "high" if viol['type'] == VIOLATION_NO_HELMET_VEST else "medium"
         events.append({
             'worker_id': stable_id,
             'violation': viol['type'],
+            'severity': sev,
             'start_frame': viol['start_frame'],
             'end_frame': end_frame if end_frame else None,  # Use provided end_frame if available
             'duration_frames': (end_frame - viol['start_frame']) if end_frame else None,
@@ -885,8 +889,10 @@ def _send_results_to_backend(video_id: str, results: dict):
       3. Create Alert documents for high-severity violations
     """
     url = f"{BACKEND_URL}/ai/results/{video_id}"
+    # Exclude frame_results — huge, not needed by backend, contains non-serializable tuples
+    payload = {k: v for k, v in results.items() if k != "frame_results"}
     try:
-        response = requests.post(url, json=results, timeout=30)
+        response = requests.post(url, json=payload, timeout=30)
         if response.status_code == 200:
             print(f"✅ Results sent to backend successfully")
         else:

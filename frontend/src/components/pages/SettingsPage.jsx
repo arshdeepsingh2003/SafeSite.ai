@@ -9,10 +9,10 @@
 // ============================================================
 
 import { useState, useEffect } from 'react'
-// import { useSettings }         from '../../hooks/useSettings'  // FILE NOT FOUND
+import { useSettings }         from '../../hooks/useSettings'
 import { useSoundSettings }    from '../../context/SoundContext'
 import { playAlarm, playBeep } from '../../services/soundService'
-// import EmailSettingsSection    from '../ui/EmailSettingsSection'  // FILE NOT FOUND
+import EmailSettingsSection    from '../ui/EmailSettingsSection'
 import toast from 'react-hot-toast'
 import api   from '../../services/api'
 
