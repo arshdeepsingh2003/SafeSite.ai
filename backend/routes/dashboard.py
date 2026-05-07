@@ -56,6 +56,17 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     else:
         change_pct = 0
 
+    # Get recent alerts for dashboard
+    recent_alerts = await alerts_collection.find({
+        "created_at": {"$gte": today_start}
+    }).sort("created_at", -1).limit(6).to_list(length=6)
+
+    # Convert ObjectId to string for JSON serialization
+    for alert in recent_alerts:
+        alert["_id"] = str(alert["_id"])
+        if "created_at" in alert and isinstance(alert["created_at"], datetime):
+            alert["created_at"] = alert["created_at"].isoformat()
+
     return {
         "stats": {
             "total_workers": total_workers,
@@ -65,5 +76,6 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
             "both_missing": both_missing,
             "compliance_rate": compliance_rate,
             "change_pct": change_pct,
-        }
+        },
+        "recent_alerts": recent_alerts
     }

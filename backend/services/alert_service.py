@@ -1,11 +1,3 @@
-# ============================================================
-# SafeSite AI — Alert Service  (Phase 8 — Email integrated)
-# File: backend/services/alert_service.py
-#
-# Phase 8 change: create_alert() now calls send_high_alert_email()
-# automatically when severity == "high".
-# ============================================================
-
 from database import alerts_collection, db
 from datetime import datetime, timedelta
 from bson import ObjectId
