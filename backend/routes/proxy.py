@@ -1,8 +1,9 @@
 import re
+import traceback
 import logging
 import urllib.parse
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, JSONResponse
 import httpx
 
 logger = logging.getLogger("hls-proxy")
@@ -14,13 +15,19 @@ BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     "Accept": "*/*",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
     "Origin": "http://localhost:5173",
     "Referer": "http://localhost:5173/",
     "Sec-Fetch-Dest": "empty",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "cross-site",
     "Connection": "keep-alive",
+}
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Expose-Headers": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "*",
 }
 
 _client: httpx.AsyncClient | None = None
@@ -45,62 +52,46 @@ async def close_client():
         _client = None
 
 
-HLS_MIME_PATTERNS = (
-    "application/vnd.apple.mpegurl",
-    "application/x-mpegurl",
-    "audio/mpegurl",
-    "audio/x-mpegurl",
-    "mpegurl",
-    "x-mpegurl",
-)
-
-
-def is_hls_playlist(content_type: str | None) -> bool:
-    if not content_type:
-        return False
-    ct = content_type.lower()
-    return any(p in ct for p in HLS_MIME_PATTERNS)
+def _is_hls_playlist(content_type: str | None, url: str = "") -> bool:
+    if content_type and "mpegurl" in content_type.lower():
+        return True
+    return urllib.parse.urlparse(url).path.endswith(".m3u8")
 
 
 URI_ATTR_RE = re.compile(r'URI="([^"]*)"')
 URI_ATTR_SQ_RE = re.compile(r"URI='([^']*)'")
 
 
-def rewrite_m3u8(content: str, manifest_url: str, request: Request) -> str:
+def _rewrite_m3u8(content: str, manifest_url: str, request: Request) -> str:
     proxy_base = str(request.base_url).rstrip("/")
     proxy_hls = f"{proxy_base}/proxy/hls"
 
-    lines = content.split("\n")
+    def _replace_uri(m: re.Match) -> str:
+        original = m.group(1)
+        resolved = urllib.parse.urljoin(manifest_url, original)
+        return f'URI="{proxy_hls}?{urllib.parse.urlencode({"url": resolved})}"'
+
+    def _replace_uri_sq(m: re.Match) -> str:
+        original = m.group(1)
+        resolved = urllib.parse.urljoin(manifest_url, original)
+        return f"URI='{proxy_hls}?{urllib.parse.urlencode({'url': resolved})}'"
+
     out = []
-
-    for line in lines:
+    for line in content.split("\n"):
         stripped = line.strip()
-
         if not stripped or stripped.startswith("#"):
-            def _replace_uri(m: re.Match) -> str:
-                original = m.group(1)
-                resolved = urllib.parse.urljoin(manifest_url, original)
-                encoded = urllib.parse.quote(resolved, safe="")
-                return f'URI="{proxy_hls}?url={encoded}"'
-
-            def _replace_uri_sq(m: re.Match) -> str:
-                original = m.group(1)
-                resolved = urllib.parse.urljoin(manifest_url, original)
-                encoded = urllib.parse.quote(resolved, safe="")
-                return f"URI='{proxy_hls}?url={encoded}'"
-
             line = URI_ATTR_RE.sub(_replace_uri, line)
             line = URI_ATTR_SQ_RE.sub(_replace_uri_sq, line)
             out.append(line)
         else:
             resolved = urllib.parse.urljoin(manifest_url, stripped)
-            encoded = urllib.parse.quote(resolved, safe="")
-            out.append(f"{proxy_hls}?url={encoded}")
-
+            out.append(f"{proxy_hls}?{urllib.parse.urlencode({'url': resolved})}")
     return "\n".join(out)
 
 
-FORWARD_HEADERS = {"content-range", "accept-ranges", "cache-control"}
+@router.options("/hls")
+async def proxy_hls_options():
+    return Response(status_code=204, headers=CORS_HEADERS)
 
 
 @router.get("/hls")
@@ -108,84 +99,87 @@ async def proxy_hls(
     request: Request,
     url: str = Query(..., description="Target HLS URL to proxy"),
 ):
-    if not url.startswith(("http://", "https://")):
-        return Response("Invalid URL — must be http(s)", status_code=400)
+    client: httpx.AsyncClient | None = None
+    response: httpx.Response | None = None
+    is_playlist = False
+    try:
+        print("Proxy URL:", url)
 
-    client = get_client()
-    headers = dict(BROWSER_HEADERS)
+        if not url or not url.startswith(("http://", "https://")):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid URL"},
+                headers=CORS_HEADERS,
+            )
 
-    range_header = request.headers.get("range")
-    if range_header:
-        headers["Range"] = range_header
+        headers = dict(BROWSER_HEADERS)
+        range_header = request.headers.get("range")
+        if range_header:
+            headers["Range"] = range_header
 
-    parsed = urllib.parse.urlparse(url)
+        client = httpx.AsyncClient(follow_redirects=True, timeout=30)
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
 
-    logger.info(
-        "HLS proxy  host=%s  status=init  url_len=%d  content_type=—",
-        parsed.hostname, len(url),
-    )
+        content_type = response.headers.get("content-type", "application/octet-stream")
+        print("Status:", response.status_code)
+        print("Content-Type:", content_type)
 
-    req = client.build_request("GET", url, headers=headers)
-    resp = await client.send(req, stream=True)
+        resp_headers = dict(CORS_HEADERS)
+        resp_headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
 
-    if resp.status_code == 414:
-        await resp.aclose()
-        logger.warning(
-            "414 from %s (url_len=%d) — retrying with minimal headers",
-            parsed.hostname, len(url),
-        )
-        minimal = {
-            "User-Agent": BROWSER_HEADERS["User-Agent"],
-            "Accept": "*/*",
-        }
-        req = client.build_request("GET", url, headers=minimal)
-        resp = await client.send(req, stream=True)
+        is_playlist = _is_hls_playlist(content_type, url)
 
-        logger.info(
-            "414-retry  host=%s  status=%d  url_len=%d",
-            parsed.hostname, resp.status_code, len(url),
-        )
+        if is_playlist:
+            raw = await response.aread()
+            await response.aclose()
+            response = None
+            text = raw.decode("utf-8")
+            text = _rewrite_m3u8(text, url, request)
+            await client.aclose()
+            client = None
+            return Response(
+                content=text.encode("utf-8"),
+                media_type="application/vnd.apple.mpegurl",
+                headers=resp_headers,
+            )
 
-    content_type = resp.headers.get("content-type", "application/octet-stream")
+        async def _stream(resp: httpx.Response, cl: httpx.AsyncClient):
+            try:
+                async for chunk in resp.aiter_bytes():
+                    yield chunk
+            except Exception:
+                pass
+            finally:
+                await resp.aclose()
+                await cl.aclose()
 
-    logger.info(
-        "HLS proxy  host=%s  status=%d  url_len=%d  content_type=%s",
-        parsed.hostname, resp.status_code, len(url), content_type,
-    )
-
-    resp_headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Expose-Headers": "*",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-    }
-    for h in FORWARD_HEADERS:
-        if h in resp.headers:
-            resp_headers[h] = resp.headers[h]
-
-    if is_hls_playlist(content_type):
-        body = await resp.aread()
-        await resp.aclose()
-        text = body.decode("utf-8", errors="replace")
-        text = rewrite_m3u8(text, url, request)
-        return Response(
-            content=text.encode("utf-8"),
-            media_type="application/vnd.apple.mpegurl",
-            status_code=resp.status_code,
+        return StreamingResponse(
+            _stream(response, client),
+            media_type=content_type,
             headers=resp_headers,
         )
 
-    async def _stream():
-        try:
-            async for chunk in resp.aiter_bytes():
-                yield chunk
-        except Exception:
-            pass
-        finally:
-            await resp.aclose()
-
-    return StreamingResponse(
-        _stream(),
-        media_type=content_type,
-        status_code=resp.status_code,
-        headers=resp_headers,
-    )
+    except httpx.HTTPStatusError as e:
+        print("HLS Proxy Error:", str(e))
+        traceback.print_exc()
+        logger.error("HLS Proxy HTTP error: %s", str(e), exc_info=True)
+        return JSONResponse(
+            status_code=e.response.status_code,
+            content={"error": str(e)},
+            headers=CORS_HEADERS,
+        )
+    except Exception as e:
+        print("HLS Proxy Error:", str(e))
+        traceback.print_exc()
+        logger.error("HLS Proxy Error: %s", str(e), exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)},
+            headers=CORS_HEADERS,
+        )
+    finally:
+        if is_playlist and response is not None:
+            await response.aclose()
+        if is_playlist and client is not None:
+            await client.aclose()
