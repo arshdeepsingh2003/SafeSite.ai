@@ -185,8 +185,10 @@ async def resolve_all_alerts() -> int:
 
 
 async def get_alert_summary() -> dict:
-    """Today's alert counts grouped by violation type."""
+    """Today's alert counts grouped by violation type, plus zone breakdown."""
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Violation type counts
     pipeline = [
         {"$match": {"created_at": {"$gte": today_start}}},
         {"$group": {"_id": "$violation_type", "count": {"$sum": 1}}}
@@ -198,4 +200,17 @@ async def get_alert_summary() -> dict:
         counts["total"] += count
         if vtype in counts:
             counts[vtype] = count
+
+    # Zone breakdown
+    zone_pipeline = [
+        {"$match": {"created_at": {"$gte": today_start}}},
+        {"$group": {"_id": "$zone", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]
+    zones = []
+    async for doc in alerts_collection.aggregate(zone_pipeline):
+        zones.append(doc["_id"])
+    counts["zones_affected"] = zones
+    counts["top_violation_zone"] = zones[0] if zones else "Unknown"
+
     return counts

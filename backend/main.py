@@ -23,6 +23,7 @@ from routes.workers     import router as workers_router
 from routes.dashboard   import router as dashboard_router
 from routes.analytics   import router as analytics_router   # ← Phase 11
 from routes.proxy       import router as proxy_router, close_client as close_httpx
+from services.groq_service import get_groq_status
 from socket_server      import sio, emit_system_status
 import os
 
@@ -48,6 +49,11 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 async def startup():
     await connect_db()
     asyncio.create_task(_heartbeat())
+    groq = get_groq_status()
+    if groq["configured"]:
+        print(f"   Groq AI:    ✅ configured ({groq['model']})")
+    else:
+        print(f"   Groq AI:    ❌ not configured — rule-based fallback active")
     print("🚀 SafeSite AI v13.0 — Analytics active")
     print("   REST:      http://localhost:8000/docs")
     print("   WebSocket: ws://localhost:8000/socket.io/")

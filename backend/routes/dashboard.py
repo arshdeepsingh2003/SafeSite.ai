@@ -61,6 +61,37 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         "created_at": {"$gte": today_start}
     }).sort("created_at", -1).limit(6).to_list(length=6)
 
+    # ── Zone breakdown (top zones) ────────────────────────────
+    zone_pipeline = [
+        {"$match": {"created_at": {"$gte": today_start}}},
+        {"$group": {"_id": "$zone", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 5},
+    ]
+    top_zones = []
+    async for doc in alerts_collection.aggregate(zone_pipeline):
+        top_zones.append({"zone": doc["_id"] or "Unknown", "count": doc["count"]})
+
+    # ── Hourly trend data ─────────────────────────────────────
+    hour_pipeline = [
+        {"$match": {"created_at": {"$gte": today_start}}},
+        {"$group": {
+            "_id": {"$hour": "$created_at"},
+            "no_helmet": {"$sum": {"$cond": [{"$eq": ["$violation_type", "no_helmet"]}, 1, 0]}},
+            "no_vest": {"$sum": {"$cond": [{"$eq": ["$violation_type", "no_vest"]}, 1, 0]}},
+            "both": {"$sum": {"$cond": [{"$eq": ["$violation_type", "no_helmet_and_no_vest"]}, 1, 0]}},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    trend_data = []
+    async for doc in alerts_collection.aggregate(hour_pipeline):
+        trend_data.append({
+            "hour": f"{doc['_id']:02d}:00",
+            "no_helmet": doc["no_helmet"],
+            "no_vest": doc["no_vest"],
+            "both": doc["both"],
+        })
+
     # Convert ObjectId to string for JSON serialization
     for alert in recent_alerts:
         alert["_id"] = str(alert["_id"])
@@ -77,5 +108,7 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
             "compliance_rate": compliance_rate,
             "change_pct": change_pct,
         },
-        "recent_alerts": recent_alerts
+        "recent_alerts": recent_alerts,
+        "top_zones": top_zones,
+        "trend_data": trend_data,
     }
