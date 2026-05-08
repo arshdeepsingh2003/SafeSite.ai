@@ -18,8 +18,9 @@ import { useSocket }        from '../../context/SocketContext'
 import LiveAIInsight        from '../ui/LiveAIInsight'
 import api   from '../../services/api'
 import toast from 'react-hot-toast'
+import { proxyHlsUrl } from '../../services/hlsProxy'
 
-const DEMO_STREAM = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
+const DEMO_STREAM = proxyHlsUrl('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')
 
 // ── Stat Card ─────────────────────────────────────────────────
 function StatCard({ icon, label, value, sub, color, subColor }) {

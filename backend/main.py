@@ -22,6 +22,7 @@ from routes.sites       import router as sites_router
 from routes.workers     import router as workers_router
 from routes.dashboard   import router as dashboard_router
 from routes.analytics   import router as analytics_router   # ← Phase 11
+from routes.proxy       import router as proxy_router, close_client as close_httpx
 from socket_server      import sio, emit_system_status
 import os
 
@@ -54,6 +55,7 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await close_db()
+    await close_httpx()
 
 async def _heartbeat():
     while True:
@@ -79,6 +81,7 @@ from routes.settings  import router as settings_router  # Phase 13
 app.include_router(analytics_router)  # /analytics/...  ← Phase 11
 app.include_router(reports_router)    # /reports/...  ← Phase 12
 app.include_router(settings_router)   # /settings/... ← Phase 13
+app.include_router(proxy_router)      # /proxy/...    ← HLS streaming proxy
 
 @app.get("/")
 def root():

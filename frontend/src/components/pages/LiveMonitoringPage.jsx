@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Hls from 'hls.js'
 import LiveAIInsight from '../ui/LiveAIInsight'  // Phase 9 — live Groq insights
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { proxyHlsUrl } from '../../services/hlsProxy'
 
 // ---- Mock data for display (will be replaced by real data in Phase 6) ----
 const mockTrendData = Array.from({ length: 13 }, (_, i) => ({
@@ -26,7 +27,7 @@ const mockZoneData = [
   { name: 'Zone D', value: 12, color: '#3b82f6' },
 ]
 
-const DEMO_STREAM = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
+const DEMO_STREAM = proxyHlsUrl('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')
 
 // ---- Sub-components ----
 
@@ -123,8 +124,9 @@ export default function LiveMonitoringPage() {
 
   function handleLoadCustomUrl() {
     if (!inputUrl.trim()) return
-    setStreamUrl(inputUrl.trim())
-    loadStream(inputUrl.trim())
+    const proxied = proxyHlsUrl(inputUrl.trim())
+    setStreamUrl(proxied)
+    loadStream(proxied)
     setShowUrlInput(false)
     setInputUrl('')
   }
