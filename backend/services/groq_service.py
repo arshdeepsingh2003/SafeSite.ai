@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 dotenv_path = Path(__file__).resolve().parent.parent / ".env"
 if dotenv_path.exists():
     load_dotenv(dotenv_path=dotenv_path)
-    print(f"📄 Loaded .env from {dotenv_path}")
+    print(f"Loaded .env from {dotenv_path}")
 else:
     print(f"⚠️  .env not found at {dotenv_path}, falling back to CWD")
     load_dotenv()
@@ -19,13 +19,13 @@ GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama3-70b-8192")
 
 # ── Startup log ──────────────────────────────────────────────
 if GROQ_API_KEY and GROQ_API_KEY != "your_groq_api_key_here":
-    print(f"✅ Groq API initialized successfully — model: {GROQ_MODEL}")
+    print(f"Groq API initialized successfully - model: {GROQ_MODEL}")
 else:
-    print(f"❌ Groq API key missing — AI features will use rule-based fallback")
+    print(f"Groq API key missing - AI features will use rule-based fallback")
     if not GROQ_API_KEY:
-        print(f"   GROQ_API_KEY is empty — check backend/.env")
+        print(f"   GROQ_API_KEY is empty - check backend/.env")
     elif GROQ_API_KEY == "your_groq_api_key_here":
-        print(f"   GROQ_API_KEY still set to placeholder — update it in backend/.env")
+        print(f"   GROQ_API_KEY still set to placeholder - update it in backend/.env")
 
 
 def _is_configured() -> bool:
@@ -224,6 +224,11 @@ RULES:
         print(f"    Exception: {e}")
         traceback.print_exc()
         return _fallback_report(alerts_data)
+
+
+async def generate_weekly_report(alerts_data: dict) -> dict:
+    """Alias for weekly reports—same logic as daily, but context-aware."""
+    return await generate_daily_report(alerts_data)
 
 
 async def generate_alert_insight(alert: dict) -> str:

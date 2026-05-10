@@ -1,29 +1,36 @@
+// ============================================================
+// SafeSite AI — useReports Hook  (Phase 12)
+// File: frontend/src/hooks/useReports.js
+//
+// Manages all reports API calls:
+//   - Fetch report list and summary stats
+//   - Generate new reports
+//   - Download, view, delete reports
+// ============================================================
+
 import { useState, useEffect, useCallback } from 'react'
 import api from '../services/api'
 import toast from 'react-hot-toast'
 
 export function useReports({ typeFilter = 'all', page = 1, limit = 5 } = {}) {
-  const [reports,    setReports]    = useState([])
-  const [summary,    setSummary]    = useState(null)
-  const [total,      setTotal]      = useState(0)
-  const [loading,    setLoading]    = useState(true)
+  const [reports,   setReports]   = useState([])
+  const [summary,   setSummary]   = useState(null)
+  const [total,     setTotal]     = useState(0)
+  const [loading,   setLoading]   = useState(true)
   const [generating, setGenerating] = useState(false)
 
+  // ── Fetch list + summary ──────────────────────────────────
   const fetchReports = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        type: typeFilter,
-        page,
-        limit,
-      })
-      const [listRes, summaryRes] = await Promise.all([
-        api.get(`/reports?${params}`),
+      const skip = (page - 1) * limit
+      const [listRes, sumRes] = await Promise.all([
+        api.get(`/reports?type=${typeFilter}&limit=${limit}&skip=${skip}`),
         api.get('/reports/summary'),
       ])
       setReports(listRes.data.reports || [])
-      setTotal(listRes.data.total || 0)
-      setSummary(summaryRes.data || null)
+      setTotal(listRes.data.total     || 0)
+      setSummary(sumRes.data)
     } catch (err) {
       console.error('Failed to load reports:', err)
     } finally {
@@ -31,62 +38,76 @@ export function useReports({ typeFilter = 'all', page = 1, limit = 5 } = {}) {
     }
   }, [typeFilter, page, limit])
 
-  useEffect(() => {
-    fetchReports()
-  }, [fetchReports])
+  useEffect(() => { fetchReports() }, [fetchReports])
 
-  const generateReport = useCallback(async ({ type, zone, site }) => {
+  // ── Generate a new report ─────────────────────────────────
+  const generateReport = useCallback(async ({
+    type     = 'daily',
+    zone     = 'all',
+    site     = 'all',
+    dateFrom = null,
+    dateTo   = null,
+  } = {}) => {
     setGenerating(true)
+    const toastId = toast.loading(`Generating ${type} report…`)
     try {
-      const params = new URLSearchParams({ type, zone, site })
-      const res = await api.post(`/reports/generate?${params}`)
-      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report generated`)
-      fetchReports()
-      return res.data
+      const res = await api.post('/reports/generate', {
+        type,
+        zone,
+        site,
+        date_from: dateFrom,
+        date_to:   dateTo,
+      })
+      toast.success('✅ Report generated!', { id: toastId })
+      await fetchReports()     // refresh list
+      return res.data.report   // return the full report object
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Could not generate report')
+      const msg = err.response?.data?.detail || 'Failed to generate report'
+      toast.error(msg, { id: toastId })
       return null
     } finally {
       setGenerating(false)
     }
   }, [fetchReports])
 
-  const getReport = useCallback(async (id) => {
+  // ── Get full report content ───────────────────────────────
+  const getReport = useCallback(async (reportId) => {
     try {
-      const res = await api.get(`/reports/${id}`)
+      const res = await api.get(`/reports/${reportId}`)
       return res.data
-    } catch (err) {
+    } catch {
       toast.error('Could not load report')
       return null
     }
   }, [])
 
-  const downloadReport = useCallback(async (id, name) => {
+  // ── Download report as .txt ───────────────────────────────
+  const downloadReport = useCallback(async (reportId, reportName) => {
     try {
-      const res = await api.get(`/reports/${id}/download`, { responseType: 'blob' })
-      const blob = new Blob([res.data], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${name || 'report'}.txt`
-      document.body.appendChild(a)
+      const res = await api.get(`/reports/${reportId}/download`, {
+        responseType: 'blob',
+      })
+      const url  = URL.createObjectURL(new Blob([res.data]))
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${reportName?.replace(/\s+/g, '_') || 'report'}.txt`
       a.click()
-      document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      toast.success('Report downloaded')
-    } catch (err) {
+      toast.success('Report downloaded!')
+    } catch {
       toast.error('Could not download report')
     }
   }, [])
 
-  const deleteReport = useCallback(async (id, name) => {
-    if (!window.confirm(`Delete "${name || 'this report'}" permanently?`)) return
+  // ── Delete report ─────────────────────────────────────────
+  const deleteReport = useCallback(async (reportId, reportName) => {
+    if (!window.confirm(`Delete "${reportName}"? This cannot be undone.`)) return
     try {
-      await api.delete(`/reports/${id}`)
+      await api.delete(`/reports/${reportId}`)
       toast.success('Report deleted')
       fetchReports()
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Could not delete report')
+    } catch {
+      toast.error('Could not delete report')
     }
   }, [fetchReports])
 
@@ -96,11 +117,11 @@ export function useReports({ typeFilter = 'all', page = 1, limit = 5 } = {}) {
     total,
     loading,
     generating,
-    totalPages: Math.max(1, Math.ceil(total / limit)),
+    totalPages:     Math.max(1, Math.ceil(total / limit)),
+    refresh:        fetchReports,
     generateReport,
     getReport,
     downloadReport,
     deleteReport,
-    refresh: fetchReports,
   }
 }

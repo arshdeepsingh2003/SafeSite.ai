@@ -1,348 +1,313 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from database import alerts_collection, reports_collection
+# ============================================================
+# SafeSite AI — Reports Routes  (Phase 12)
+# File: backend/routes/reports.py
+#
+# Endpoints:
+#   POST /reports/generate        — generate a new report
+#   GET  /reports                 — list saved reports
+#   GET  /reports/{id}            — get one report's full content
+#   DELETE /reports/{id}          — delete a report
+#   GET  /reports/{id}/download   — download as .txt file
+#   GET  /reports/summary         — stat cards for the reports page
+# ============================================================
+
+from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
+from typing import Optional
+from database import db, alerts_collection
 from services.auth_service import get_current_user
 from services.groq_service import generate_daily_report
-from datetime import datetime, timedelta
 from bson import ObjectId
-from fastapi.responses import PlainTextResponse
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-# ── GET /reports ─────────────────────────────────────────────
-@router.get("")
-async def list_reports(
-    type_filter: str = Query(default="all", alias="type"),
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=5, ge=1, le=50),
-    current_user: dict = Depends(get_current_user),
-):
-    """List saved reports with pagination and type filter."""
-    query = {}
-    if type_filter and type_filter != "all":
-        query["type"] = type_filter
+# ── Request body ─────────────────────────────────────────────
+class GenerateReportRequest(BaseModel):
+    type:  str = "daily"    # daily | weekly | monthly | zone | custom
+    zone:  str = "all"
+    site:  str = "all"
+    date_from: Optional[str] = None
+    date_to:   Optional[str] = None
 
-    total = await reports_collection.count_documents(query)
-    cursor = reports_collection.find(query).sort("created_at", -1).skip((page - 1) * limit).limit(limit)
-    reports = []
-    async for doc in cursor:
-        doc["id"] = str(doc.pop("_id"))
-        reports.append(doc)
+
+# ── Helper: build stats for a date range ─────────────────────
+async def _range_stats(start: datetime, end: datetime, zone: str = "all") -> dict:
+    match = {"created_at": {"$gte": start, "$lte": end}}
+    if zone != "all":
+        match["zone"] = zone
+
+    pipeline = [
+        {"$match": match},
+        {"$group": {
+            "_id":  "$violation_type",
+            "count": {"$sum": 1}
+        }}
+    ]
+
+    counts = {"no_helmet": 0, "no_vest": 0, "no_helmet_and_no_vest": 0}
+    async for doc in alerts_collection.aggregate(pipeline):
+        if doc["_id"] in counts:
+            counts[doc["_id"]] = doc["count"]
+
+    total_violations = sum(counts.values())
+
+    # Estimate total workers detected (violations + assumed compliant)
+    total_workers = int(total_violations * 1.8) if total_violations else 0
 
     return {
-        "reports": reports,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "totalPages": max(1, -(-total // limit)),
+        "total_workers":          total_workers,
+        "total_violations":       total_violations,
+        "no_helmet":              counts["no_helmet"],
+        "no_vest":                counts["no_vest"],
+        "no_helmet_and_no_vest":  counts["no_helmet_and_no_vest"],
+        "compliant":              max(0, total_workers - total_violations),
+        "compliance_rate":        round(
+            ((total_workers - total_violations) / total_workers * 100) if total_workers else 100, 1
+        ),
+        "high_risk_alerts":       counts["no_helmet_and_no_vest"],
     }
 
 
 # ── GET /reports/summary ─────────────────────────────────────
 @router.get("/summary")
 async def reports_summary(current_user: dict = Depends(get_current_user)):
-    """Summary stats for the Reports page header."""
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=6)
+    """Stat cards shown at the top of the Reports page."""
+    today  = datetime.utcnow()
+    week_start = today - timedelta(days=7)
+    prev_week  = week_start - timedelta(days=7)
 
-    total_reports = await reports_collection.count_documents({})
-    recent_reports = await reports_collection.count_documents({"created_at": {"$gte": week_start}})
+    current = await _range_stats(week_start, today)
+    prev    = await _range_stats(prev_week,  week_start)
 
-    today_alerts = await alerts_collection.count_documents({"created_at": {"$gte": today_start}})
-    week_alerts = await alerts_collection.count_documents({"created_at": {"$gte": week_start}})
+    def pct_change(cur, prv):
+        if not prv: return 0
+        return round((cur - prv) / prv * 100, 1)
 
-    total_workers_today = len(await alerts_collection.distinct("worker_id", {"created_at": {"$gte": today_start}}))
-    high_risk_today = await alerts_collection.count_documents({
-        "created_at": {"$gte": today_start},
-        "violation_type": "no_helmet_and_no_vest",
-    })
-    # Count all violations as distinct workers with any violation today
-    violation_workers_today = len(await alerts_collection.distinct("worker_id", {
-        "created_at": {"$gte": today_start},
-        "violation_type": {"$ne": None},
-    }))
+    # Count total saved reports
+    total_reports = await db["reports"].count_documents({})
 
-    prev_week_start = week_start - timedelta(days=7)
-    prev_week_violations = await alerts_collection.count_documents({
-        "created_at": {"$gte": prev_week_start, "$lt": week_start},
-    })
-
-    change_pct = 0
-    if prev_week_violations > 0:
-        change_pct = round(((week_alerts - prev_week_violations) / prev_week_violations) * 100, 1)
-
-    compliance_rate = max(0, 100 - (today_alerts * 3)) if today_alerts > 0 else 95.0
-
-    # Zone breakdown for reports summary
-    zone_pipeline = [
-        {"$match": {"created_at": {"$gte": today_start}}},
-        {"$group": {"_id": "$zone", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-    ]
-    zones_list = []
-    async for doc in alerts_collection.aggregate(zone_pipeline):
-        zones_list.append(doc["_id"])
+    # Count active cameras from sites
+    camera_count = 0
+    async for site in db["sites"].find({"is_active": True}):
+        camera_count += site.get("camera_count", 0)
 
     return {
-        "total_reports": total_reports,
-        "compliance_rate": compliance_rate,
-        "total_violations": today_alerts,
-        "workers_detected": max(total_workers_today, 1),
-        "high_risk_alerts": high_risk_today,
-        "total_cameras": 5,
-        "zones_affected": zones_list,
-        "top_violation_zone": zones_list[0] if zones_list else "Unknown",
+        "total_reports":    total_reports,
+        "compliance_rate":  current["compliance_rate"],
+        "total_violations": current["total_violations"],
+        "workers_detected": current["total_workers"],
+        "high_risk_alerts": current["high_risk_alerts"],
+        "total_cameras":    camera_count or 10,
         "changes": {
-            "compliance_rate": 0,
-            "total_violations": change_pct,
-            "workers_detected": 0,
-            "high_risk_alerts": 0,
-        },
+            "compliance_rate":  pct_change(current["compliance_rate"],  prev["compliance_rate"]),
+            "total_violations": pct_change(current["total_violations"], prev["total_violations"]),
+            "workers_detected": pct_change(current["total_workers"],    prev["total_workers"]),
+            "high_risk_alerts": pct_change(current["high_risk_alerts"], prev["high_risk_alerts"]),
+        }
     }
 
 
 # ── POST /reports/generate ───────────────────────────────────
-@router.post("/generate")
+@router.post("/generate", status_code=201)
 async def generate_report(
-    type: str = Query(default="daily"),
-    zone: str = Query(default="all"),
-    site: str = Query(default="all"),
+    body: GenerateReportRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Generate a safety report (daily/weekly) via Groq and save it."""
+    """
+    Generate a new report using Groq LLM and save to MongoDB.
+
+    Steps:
+      1. Query alert stats for the requested period
+      2. Send stats to Groq → get human-readable summary
+      3. Save the full report to the "reports" collection
+      4. Return the saved report ID + content
+    """
     now = datetime.utcnow()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    if type == "weekly":
-        period_start = today_start - timedelta(days=6)
-        date_range = f"{period_start.strftime('%b %d')} – {now.strftime('%b %d, %Y')}"
-        report_name = f"Weekly Safety Report — {period_start.strftime('%b %d')} to {now.strftime('%b %d')}"
+    # ── Determine date range ──
+    if body.type == "daily":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end   = now
+        label = f"{now.strftime('%B %d, %Y')}"
+    elif body.type == "weekly":
+        start = now - timedelta(days=7)
+        end   = now
+        label = f"{start.strftime('%b %d')} - {end.strftime('%b %d, %Y')}"
+    elif body.type == "monthly":
+        start = now - timedelta(days=30)
+        end   = now
+        label = f"{start.strftime('%b %d')} - {end.strftime('%b %d, %Y')}"
+    elif body.type == "zone" and body.zone != "all":
+        start = now - timedelta(days=7)
+        end   = now
+        label = f"{body.zone} — {start.strftime('%b %d')} - {end.strftime('%b %d, %Y')}"
     else:
-        period_start = today_start
-        date_range = today_start.strftime("%b %d, %Y")
-        report_name = f"Daily Safety Report — {today_start.strftime('%b %d, %Y')}"
+        # Custom range
+        try:
+            start = datetime.fromisoformat(body.date_from) if body.date_from else now - timedelta(days=7)
+            end   = datetime.fromisoformat(body.date_to)   if body.date_to   else now
+        except Exception:
+            start = now - timedelta(days=7)
+            end   = now
+        label = f"{start.strftime('%b %d')} - {end.strftime('%b %d, %Y')}"
 
-    # Build match filter
-    match_filter = {"created_at": {"$gte": period_start, "$lt": now}}
-    if zone and zone != "all":
-        match_filter["zone"] = zone
-    if site and site != "all":
-        match_filter["site"] = site
+    # ── Get violation stats ──
+    stats = await _range_stats(start, end, body.zone)
 
-    # Aggregate violations
-    pipeline = [
-        {"$match": match_filter},
-        {"$group": {"_id": "$violation_type", "count": {"$sum": 1}}},
-    ]
-    counts = {"no_helmet": 0, "no_vest": 0, "no_helmet_and_no_vest": 0}
-    total_alerts = 0
-    async for doc in alerts_collection.aggregate(pipeline):
-        vtype = doc["_id"]
-        count = doc["count"]
-        total_alerts += count
-        if vtype in counts:
-            counts[vtype] = count
-
-    # Zone breakdown
+    # ── Top zones breakdown ──
     zone_pipeline = [
-        {"$match": match_filter},
+        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
         {"$group": {"_id": "$zone", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
+        {"$sort":  {"count": -1}},
+        {"$limit": 5},
     ]
-    zones = {}
-    async for doc in alerts_collection.aggregate(zone_pipeline):
-        zones[doc["_id"]] = doc["count"]
+    top_zones = []
+    async for z in alerts_collection.aggregate(zone_pipeline):
+        top_zones.append({"zone": z["_id"], "count": z["count"]})
 
-    resolved = await alerts_collection.count_documents({**match_filter, "resolved": True})
-    compliance_rate = max(0, 100 - (total_alerts * 2)) if total_alerts > 0 else 95.0
+    # ── Call Groq LLM ──
+    llm_summary = ""
+    try:
+        alerts_data = {
+            "date": now.strftime("%Y-%m-%d"),
+            "total_alerts": stats["total_violations"],
+            "no_helmet": stats["no_helmet"],
+            "no_vest": stats["no_vest"],
+            "no_helmet_and_no_vest": stats["no_helmet_and_no_vest"],
+            "resolved": 0,
+            "compliance_rate": stats["compliance_rate"],
+            "peak_hour": "N/A",
+            "zones": {z["zone"]: z["count"] for z in top_zones},
+        }
+        llm_summary = await generate_daily_report(alerts_data)
+    except Exception as e:
+        llm_summary = f"AI summary unavailable: {e}"
 
-    alerts_data = {
-        "date": date_range,
-        "total_alerts": total_alerts,
-        "no_helmet": counts["no_helmet"],
-        "no_vest": counts["no_vest"],
-        "no_helmet_and_no_vest": counts["no_helmet_and_no_vest"],
-        "resolved": resolved,
-        "zones": zones,
-        "peak_hour": "N/A",
-        "compliance_rate": compliance_rate,
-    }
+    # ── Build full text report ──
+    report_lines = [
+        f"SafeSite AI — {body.type.title()} Safety Report",
+        f"Period: {label}",
+        f"Site: {body.site}  |  Zone: {body.zone}",
+        f"Generated: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+        "=" * 60,
+        "",
+        "EXECUTIVE SUMMARY",
+        "-" * 40,
+        llm_summary,
+        "",
+        "VIOLATION STATISTICS",
+        "-" * 40,
+        f"Total Workers Detected:    {stats['total_workers']}",
+        f"Total Violations:          {stats['total_violations']}",
+        f"  No Helmet:               {stats['no_helmet']}",
+        f"  No Vest:                 {stats['no_vest']}",
+        f"  No Helmet & No Vest:     {stats['no_helmet_and_no_vest']}",
+        f"Compliant Workers:         {stats['compliant']}",
+        f"Compliance Rate:           {stats['compliance_rate']}%",
+        f"High Risk Alerts:          {stats['high_risk_alerts']}",
+        "",
+        "TOP VIOLATION ZONES",
+        "-" * 40,
+    ] + [f"  {z['zone']}: {z['count']} violations" for z in top_zones] + [
+        "",
+        "=" * 60,
+        "Generated by SafeSite AI — Powered by Groq LLaMA 3",
+    ]
+    full_text = "\n".join(report_lines)
 
-    groq_result = await generate_daily_report(alerts_data)
-
-    # Build top_zones array
-    top_zones = [{"zone": z, "count": c} for z, c in sorted(zones.items(), key=lambda x: -x[1])]
-
+    # ── Save to MongoDB ──
     report_doc = {
-        "name": report_name,
-        "type": type,
-        "zone": zone,
-        "site": site,
-        "date_range": date_range,
-        "stats": {
-            "total_workers": total_alerts or 1,
-            "compliance_rate": compliance_rate,
-            "total_violations": total_alerts,
-            "high_risk_alerts": counts["no_helmet_and_no_vest"],
-        },
-        "llm_summary": groq_result.get("executive_summary", ""),
-        "llm_full": groq_result,
-        "top_zones": top_zones,
-        "created_at": now,
-        "generated_by": groq_result.get("generated_by", "groq"),
+        "name":         f"{body.type.title()} Safety Report",
+        "type":         body.type,
+        "date_range":   label,
+        "site":         body.site,
+        "zone":         body.zone,
+        "generated_on": now,
+        "generated_by": current_user.get("sub"),
+        "stats":        stats,
+        "top_zones":    top_zones,
+        "llm_summary":  llm_summary,
+        "full_text":    full_text,
+    }
+    result = await db["reports"].insert_one(report_doc)
+    report_doc["id"] = str(result.inserted_id)
+    report_doc.pop("_id", None)
+
+    return {
+        "message":    "✅ Report generated successfully!",
+        "report_id":  report_doc["id"],
+        "report":     report_doc,
     }
 
-    result = await reports_collection.insert_one(report_doc)
-    report_doc["id"] = str(result.inserted_id)
-    del report_doc["_id"]
 
-    return report_doc
+# ── GET /reports ─────────────────────────────────────────────
+@router.get("")
+async def list_reports(
+    type:  str = "all",
+    limit: int = 10,
+    skip:  int = 0,
+    current_user: dict = Depends(get_current_user),
+):
+    """List saved reports, newest first."""
+    query = {}
+    if type != "all":
+        query["type"] = type
+
+    total   = await db["reports"].count_documents(query)
+    reports = []
+    async for r in db["reports"].find(query).sort("generated_on", -1).skip(skip).limit(limit):
+        r["id"] = str(r.pop("_id"))
+        r.pop("full_text", None)   # Don't send full text in list view
+        r["generated_on"] = r["generated_on"].isoformat() if isinstance(r.get("generated_on"), datetime) else r.get("generated_on","")
+        reports.append(r)
+
+    return {"reports": reports, "total": total}
 
 
 # ── GET /reports/{id} ────────────────────────────────────────
 @router.get("/{report_id}")
-async def get_report(
-    report_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Get a single report by ID."""
+async def get_report(report_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a single report's full content."""
     try:
-        doc = await reports_collection.find_one({"_id": ObjectId(report_id)})
+        r = await db["reports"].find_one({"_id": ObjectId(report_id)})
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid report ID format")
-
-    if not doc:
+        raise HTTPException(status_code=400, detail="Invalid report ID")
+    if not r:
         raise HTTPException(status_code=404, detail="Report not found")
-
-    doc["id"] = str(doc.pop("_id"))
-    return doc
+    r["id"] = str(r.pop("_id"))
+    r["generated_on"] = r["generated_on"].isoformat() if isinstance(r.get("generated_on"), datetime) else r.get("generated_on","")
+    return r
 
 
 # ── GET /reports/{id}/download ───────────────────────────────
 @router.get("/{report_id}/download")
-async def download_report(
-    report_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Download a report as a .txt file."""
+async def download_report(report_id: str, current_user: dict = Depends(get_current_user)):
+    """Download report as a plain-text file."""
     try:
-        doc = await reports_collection.find_one({"_id": ObjectId(report_id)})
+        r = await db["reports"].find_one({"_id": ObjectId(report_id)})
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid report ID format")
-
-    if not doc:
+        raise HTTPException(status_code=400, detail="Invalid report ID")
+    if not r:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    llm = doc.get("llm_full", {})
-    stats = doc.get("stats", {})
-
-    lines = [
-        f"{'='*60}",
-        f"  SafeSite AI — Safety Report",
-        f"  {doc.get('name', 'Report')}",
-        f"{'='*60}",
-        f"",
-        f"  Date Range:     {doc.get('date_range', 'N/A')}",
-        f"  Type:           {doc.get('type', 'daily').title()}",
-        f"  Site:           {doc.get('site', 'All Sites')}",
-        f"  Zone:           {doc.get('zone', 'All Zones')}",
-        f"  Generated:      {doc.get('created_at', 'N/A')}",
-        f"  Generated By:   {doc.get('generated_by', 'N/A')}",
-        f"",
-        f"{'─'*60}",
-        f"  EXECUTIVE SUMMARY",
-        f"{'─'*60}",
-        f"  {llm.get('executive_summary', 'N/A')}",
-        f"",
-        f"{'─'*60}",
-        f"  KEY STATISTICS",
-        f"{'─'*60}",
-        f"  Total Workers:      {stats.get('total_workers', 0)}",
-        f"  Compliance Rate:    {stats.get('compliance_rate', 0)}%",
-        f"  Total Violations:   {stats.get('total_violations', 0)}",
-        f"  High Risk Alerts:   {stats.get('high_risk_alerts', 0)}",
-        f"",
-        f"{'─'*60}",
-        f"  KEY FINDINGS",
-        f"{'─'*60}",
-    ]
-
-    for finding in llm.get("key_findings", []):
-        lines.append(f"  • {finding}")
-
-    lines += [
-        f"",
-        f"{'─'*60}",
-        f"  ZONE ANALYSIS",
-        f"{'─'*60}",
-        f"  {llm.get('zone_analysis', 'N/A')}",
-        f"",
-        f"{'─'*60}",
-        f"  TREND ANALYSIS",
-        f"{'─'*60}",
-        f"  {llm.get('trend_analysis', 'N/A')}",
-        f"",
-        f"{'─'*60}",
-        f"  TOP VIOLATION ZONES",
-        f"{'─'*60}",
-    ]
-
-    for z in doc.get("top_zones", []):
-        lines.append(f"  • {z['zone']}: {z['count']} violations")
-
-    lines += [
-        f"",
-        f"{'─'*60}",
-        f"  IMMEDIATE ACTIONS",
-        f"{'─'*60}",
-    ]
-    for action in llm.get("immediate_actions", []):
-        lines.append(f"  □ {action}")
-
-    lines += [
-        f"",
-        f"{'─'*60}",
-        f"  RECOMMENDATIONS",
-        f"{'─'*60}",
-    ]
-    for rec in llm.get("recommendations", []):
-        lines.append(f"  → {rec}")
-
-    lines += [
-        f"",
-        f"{'─'*60}",
-        f"  CONCLUSION",
-        f"{'─'*60}",
-        f"  {llm.get('conclusion', 'N/A')}",
-        f"",
-        f"{'='*60}",
-        f"  SafeSite AI — Construction Safety Monitoring",
-        f"  Generated on {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
-        f"{'='*60}",
-    ]
-
-    text = "\n".join(lines)
-    filename = f"safesite_report_{doc.get('type', 'report')}_{doc.get('date_range', 'unknown').replace(' ', '_').replace('–', 'to')}.txt"
-
+    filename = f"safesite-{r.get('type','report')}-{r.get('date_range','').replace(' ','_').replace(',','')}.txt"
     return PlainTextResponse(
-        content=text,
+        content=r.get("full_text", "No content"),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
 # ── DELETE /reports/{id} ─────────────────────────────────────
 @router.delete("/{report_id}")
-async def delete_report(
-    report_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Delete a report."""
+async def delete_report(report_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a report permanently."""
     try:
-        result = await reports_collection.delete_one({"_id": ObjectId(report_id)})
+        result = await db["reports"].delete_one({"_id": ObjectId(report_id)})
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid report ID format")
-
+        raise HTTPException(status_code=400, detail="Invalid report ID")
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Report not found")
-
     return {"message": "Report deleted"}

@@ -14,6 +14,7 @@ from database import connect_db, close_db
 from routes.auth        import router as auth_router
 from routes.video       import router as video_router
 from routes.ai_results      import router as ai_router
+from routes.live_detection   import router as live_detection_router  # Live stream boxes
 from routes.alerts      import router as alerts_router
 from routes.socket_test import router as test_router
 from routes.email       import router as email_router
@@ -33,7 +34,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,7 +48,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 async def startup():
     await connect_db()
     asyncio.create_task(_heartbeat())
-    print("🚀 SafeSite AI v13.0 — Analytics active")
+    print("SafeSite AI v13.0 - Analytics active")
     print("   REST:      http://localhost:8000/docs")
     print("   WebSocket: ws://localhost:8000/socket.io/")
 
@@ -67,6 +68,7 @@ async def _heartbeat():
 app.include_router(auth_router)       # /auth/...
 app.include_router(video_router)      # /video/...
 app.include_router(ai_router)         # /ai/...
+app.include_router(live_detection_router)  # /ai/live-detection, /ai/stream-started/stopped
 app.include_router(alerts_router)     # /alerts/...
 app.include_router(test_router)       # /test/...
 app.include_router(email_router)      # /email/...

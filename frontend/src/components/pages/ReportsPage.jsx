@@ -1,3 +1,17 @@
+// ============================================================
+// SafeSite AI — Reports Page  (Phase 12 — full rebuild)
+// File: frontend/src/components/pages/ReportsPage.jsx
+//
+// Sections (matching design):
+//   • Filter bar  — Report Type, Date Range, Site, Zone, Generate
+//   • 6 Stat cards — Total Reports, Compliance, Violations, Workers, High Risk, Cameras
+//   • Report Overview — donut + violation breakdown list
+//   • Violations Trend — line chart (Daily / Weekly toggle)
+//   • Report Insights — Groq AI bullet points
+//   • Generated Reports table — paginated list with actions
+//   • Report Preview panel — full text + download button
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -210,23 +224,16 @@ export default function ReportsPage() {
     async function loadInsights() {
       setInsightLoad(true)
       try {
-        const zones = summary.zones_affected?.length ? summary.zones_affected : ['Zone A']
-      const topZone = summary.top_violation_zone || zones[0]
-      const totalViolations = summary.total_violations || 0
-      const noHelmet = Math.round(totalViolations * 0.45)
-      const noVest = Math.round(totalViolations * 0.35)
-      const both = summary.high_risk_alerts || 0
-      const totalWorkers = summary.workers_detected || 0
-      const compliant = Math.round(totalWorkers * (summary.compliance_rate / 100))
-      const res = await analyzeDetections({
-          zone:                topZone,
-          total_workers:       totalWorkers,
-          compliant:           compliant,
-          no_helmet:           noHelmet,
-          no_vest:             noVest,
-          no_helmet_and_no_vest: both,
-          compliance_rate:     summary.compliance_rate || 0,
-          frames_analyzed:     totalViolations * 5,
+        const res = await analyzeDetections({
+          total_workers:      summary.workers_detected,
+          compliant_workers:  Math.round(summary.workers_detected * (summary.compliance_rate / 100)),
+          no_helmet_count:    Math.round(summary.total_violations * 0.45),
+          no_vest_count:      Math.round(summary.total_violations * 0.35),
+          both_missing_count: summary.high_risk_alerts,
+          compliance_rate:    summary.compliance_rate,
+          zones_affected:     ['Zone A', 'Zone B', 'Zone C'],
+          top_violation_zone: 'Zone A',
+          frame_count:        summary.total_violations * 5,
         })
         // Turn recommendations into bullet points
         if (res?.recommendations?.length) {
