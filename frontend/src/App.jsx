@@ -18,11 +18,11 @@ import DashboardPage      from './components/pages/DashboardPage'      // Phase 
 import LiveMonitoringPage from './components/pages/LiveMonitoringPage'
 import VideoUploadPage    from './components/pages/VideoUploadPage'
 import AlertsPage         from './components/pages/AlertsPage'
-import ReportsPage        from './components/pages/ReportsPage'
-// import SitesPage          from './components/pages/SitesPage'           // Phase 10 ✅ // FILE NOT FOUND
-// import WorkersPage        from './components/pages/WorkersPage'         // Phase 10 ✅ // FILE NOT FOUND
+import ReportsPage        from './components/pages/ReportsPage'         // Phase 9 ✅
+import SitesPage          from './components/pages/SitesPage'           // Phase 10 ✅
+import WorkersPage        from './components/pages/WorkersPage'         // Phase 10 ✅
 import SettingsPage       from './components/pages/SettingsPage'
-// import AnalyticsPage      from './components/pages/AnalyticsPage'      // Phase 11 ✅ // FILE NOT FOUND
+import AnalyticsPage      from './components/pages/AnalyticsPage'      // Phase 11 ✅
 
 const Placeholder = ({ title, phase }) => (
   <div style={{ padding: '20px' }}>
@@ -73,16 +73,16 @@ export default function App() {
                   <Route path="/live-monitoring" element={<LiveMonitoringPage />} />
                   <Route path="/video-upload"    element={<VideoUploadPage />} />
                   <Route path="/alerts"          element={<AlertsPage />} />
-                  <Route path="/reports"         element={<ReportsPage />} />
-                   <Route path="/sites"           element={<Placeholder title="Sites" phase="10" />} />           {/* ✅ Phase 10 */}
-                   <Route path="/workers"         element={<Placeholder title="Workers" phase="10" />} />         {/* ✅ Phase 10 */}
-                   <Route path="/settings"        element={<SettingsPage />} />
-                   <Route path="/analytics"       element={<Placeholder title="Analytics" phase="11" />} />           {/* ✅ Phase 11 */}
+                  <Route path="/reports"         element={<ReportsPage />} />         {/* ✅ Phase 12 */}
+                  <Route path="/sites"           element={<SitesPage />} />           {/* ✅ Phase 10 */}
+                  <Route path="/workers"         element={<WorkersPage />} />         {/* ✅ Phase 10 */}
+                  <Route path="/settings"        element={<SettingsPage />} />
+                  <Route path="/analytics"       element={<AnalyticsPage />} />           {/* ✅ Phase 11 */}
                 </Route>
 
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
-              </BrowserRouter>
+            </BrowserRouter>
           </SocketProvider>
         </SoundProvider>
       </AlertProvider>

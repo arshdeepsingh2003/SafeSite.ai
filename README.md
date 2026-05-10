@@ -166,9 +166,20 @@ pip install -r requirements.txt
 
 #### 3c. Download the PPE Model
 
-Place a YOLO model weights file at `ai-service/model/ppe_model.pt`.
+The recommended model is `yolo11m_safety.pt` from Hugging Face with classes: `hat`, `nohat`, `novest`, `person`, `vest`.
 
-The model should support these classes: `hat`, `nohat`, `novest`, `person`, `vest`.
+Download and place it at `ai-service/model/ppe_model.pt`:
+
+```bash
+cd ai-service
+python -c "
+from huggingface_hub import hf_hub_download
+import shutil
+model_path = hf_hub_download(repo_id='wesjos/Yolo-hard-hat-safety-vest', filename='yolo11m_safety.pt')
+shutil.copy2(model_path, 'model/ppe_model.pt')
+print('Model downloaded to model/ppe_model.pt')
+"
+```
 
 > A standard YOLOv8n COCO model (`yolov8n.pt`) can be used for testing but **will not** detect PPE-specific classes.
 

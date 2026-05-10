@@ -13,14 +13,13 @@ import {
 } from 'recharts'
 import { useAuth }          from '../../context/AuthContext'
 import { useSocket }        from '../../context/SocketContext'
-// import { useSoundSettings } from '../../context/SoundContext'  // FILE NOT FOUND
-// import { playAlarm, playBeep } from '../../services/soundService'  // FILE NOT FOUND
+import { useSoundSettings } from '../../context/SoundContext'
+import { playAlarm, playBeep } from '../../services/soundService'
 import LiveAIInsight        from '../ui/LiveAIInsight'
 import api   from '../../services/api'
 import toast from 'react-hot-toast'
-import { proxyHlsUrl } from '../../services/hlsProxy'
 
-const DEMO_STREAM = proxyHlsUrl('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')
+const DEMO_STREAM = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
 
 // ── Stat Card ─────────────────────────────────────────────────
 function StatCard({ icon, label, value, sub, color, subColor }) {
@@ -80,7 +79,7 @@ function AlertRow({ alert }) {
 export default function DashboardPage() {
   const { user }       = useAuth()
   const { isConnected, lastAlert } = useSocket()
-  // const { soundEnabled } = useSoundSettings()  // FILE NOT FOUND
+  const { soundEnabled } = useSoundSettings()
 
   const [stats,       setStats]       = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -105,11 +104,11 @@ export default function DashboardPage() {
   }, [])
 
   // ── Play sound when real-time alert arrives ──────────────
-  // useEffect(() => {  // soundService missing
-  //   if (!lastAlert || !soundEnabled) return
-  //   if (lastAlert.severity === 'high') playAlarm()
-  //   else playBeep()
-  // }, [lastAlert, soundEnabled])
+  useEffect(() => {
+    if (!lastAlert || !soundEnabled) return
+    if (lastAlert.severity === 'high') playAlarm()
+    else playBeep()
+  }, [lastAlert, soundEnabled])
 
   // ── Load HLS stream ──────────────────────────────────────
   useEffect(() => {
@@ -130,11 +129,11 @@ export default function DashboardPage() {
 
   // ── Derived display values ───────────────────────────────
   const s          = stats
-  const total      = s?.stats?.total_workers      ?? 0
-  const compliant  = s?.stats?.compliant          ?? 0
-  const noHelmet   = s?.stats?.no_helmet          ?? 0
-  const noVest     = s?.stats?.no_vest            ?? 0
-  const bothMiss   = s?.stats?.both_missing ?? 0
+  const total      = s?.stat_cards?.total_workers      ?? 0
+  const compliant  = s?.stat_cards?.compliant          ?? 0
+  const noHelmet   = s?.stat_cards?.no_helmet          ?? 0
+  const noVest     = s?.stat_cards?.no_vest            ?? 0
+  const bothMiss   = s?.stat_cards?.no_helmet_and_no_vest ?? 0
   const compRate   = total > 0 ? Math.round((compliant / total) * 100) : 0
 
   const donutData  = [
@@ -153,7 +152,7 @@ export default function DashboardPage() {
       {/* ── Stat Cards Row ── */}
       <div style={{ display: 'flex', gap: '14px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <StatCard icon="👥" label="Total Workers Detected" value={loading ? '…' : total}
-          sub={s?.stats?.change_pct ? `↑ ${s.stats.change_pct}% vs yesterday` : 'All workers'}
+          sub={s?.stat_cards?.workers_change ? `↑ ${s.stat_cards.workers_change}% vs yesterday` : 'All workers'}
           color="#3b82f6" subColor="#22c55e" />
         <StatCard icon="✅" label="Compliant (Safe)" value={loading ? '…' : compliant}
           sub={`${compRate}% of total`} color="#22c55e" />
