@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from database import connect_db, close_db
 from routes.auth        import router as auth_router
 from routes.video       import router as video_router
-from routes.ai_results  import router as ai_router
+from routes.ai_results      import router as ai_router
 from routes.alerts      import router as alerts_router
 from routes.socket_test import router as test_router
 from routes.email       import router as email_router
@@ -22,8 +22,6 @@ from routes.sites       import router as sites_router
 from routes.workers     import router as workers_router
 from routes.dashboard   import router as dashboard_router
 from routes.analytics   import router as analytics_router   # ← Phase 11
-from routes.proxy       import router as proxy_router, close_client as close_httpx
-from services.groq_service import get_groq_status
 from socket_server      import sio, emit_system_status
 import os
 
@@ -49,11 +47,6 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 async def startup():
     await connect_db()
     asyncio.create_task(_heartbeat())
-    groq = get_groq_status()
-    if groq["configured"]:
-        print(f"   Groq AI:    ✅ configured ({groq['model']})")
-    else:
-        print(f"   Groq AI:    ❌ not configured — rule-based fallback active")
     print("🚀 SafeSite AI v13.0 — Analytics active")
     print("   REST:      http://localhost:8000/docs")
     print("   WebSocket: ws://localhost:8000/socket.io/")
@@ -61,7 +54,6 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await close_db()
-    await close_httpx()
 
 async def _heartbeat():
     while True:
@@ -87,7 +79,6 @@ from routes.settings  import router as settings_router  # Phase 13
 app.include_router(analytics_router)  # /analytics/...  ← Phase 11
 app.include_router(reports_router)    # /reports/...  ← Phase 12
 app.include_router(settings_router)   # /settings/... ← Phase 13
-app.include_router(proxy_router)      # /proxy/...    ← HLS streaming proxy
 
 @app.get("/")
 def root():
