@@ -22,6 +22,7 @@ from routes.llm         import router as llm_router
 from routes.dashboard   import router as dashboard_router
 from routes.analytics   import router as analytics_router   # ← Phase 11
 from routes.reports     import router as reports_router     # ← Phase 12
+from routes.proxy       import router as proxy_router       # HLS proxy
 from socket_server      import sio, emit_system_status
 import os
 
@@ -75,6 +76,7 @@ app.include_router(llm_router)        # /llm/...
 app.include_router(dashboard_router)  # /dashboard/...
 app.include_router(analytics_router)  # /analytics/...  ← Phase 11
 app.include_router(reports_router)    # /reports/...  ← Phase 12
+app.include_router(proxy_router)      # /proxy/hls...
 
 @app.get("/")
 def root():

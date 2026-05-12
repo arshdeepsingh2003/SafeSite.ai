@@ -9,6 +9,7 @@ import { AuthProvider }   from './context/AuthContext'
 import { AlertProvider }  from './context/AlertContext'
 import { SocketProvider } from './context/SocketContext'
 import { SoundProvider }  from './context/SoundContext'
+import { StreamProvider } from './context/StreamContext'
 import ProtectedRoute     from './components/layout/ProtectedRoute'
 import AppLayout          from './components/layout/AppLayout'
 
@@ -42,6 +43,7 @@ export default function App() {
       <AlertProvider>
         <SoundProvider>
           <SocketProvider>
+            <StreamProvider>
             <BrowserRouter>
               <Toaster
                 position="top-right"
@@ -77,6 +79,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </BrowserRouter>
+            </StreamProvider>
           </SocketProvider>
         </SoundProvider>
       </AlertProvider>
