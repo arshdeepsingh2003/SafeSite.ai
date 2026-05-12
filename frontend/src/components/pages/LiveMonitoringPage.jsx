@@ -1,33 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import Hls from 'hls.js'
 import LiveAIInsight from '../ui/LiveAIInsight'  // Phase 9 — live Groq insights
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie } from 'recharts'
 import { proxyHlsUrl } from '../../services/hlsProxy'
 
-// ---- Mock data for display (will be replaced by real data in Phase 6) ----
-const mockTrendData = Array.from({ length: 13 }, (_, i) => ({
-  time: `${String(i * 2).padStart(2, '0')}:00`,
-  helmet: Math.floor(Math.random() * 35) + 5,
-  vest:   Math.floor(Math.random() * 25) + 3,
-  both:   Math.floor(Math.random() * 12) + 1,
-}))
-
-const mockDetections = [
-  { id: 1, type: 'No Helmet & No Vest', camera: 'Camera 1', zone: 'Zone A', time: '10:30:15 AM', color: '#ef4444' },
-  { id: 2, type: 'No Helmet',           camera: 'Camera 1', zone: 'Zone A', time: '10:30:12 AM', color: '#f97316' },
-  { id: 3, type: 'No Vest',             camera: 'Camera 1', zone: 'Zone B', time: '10:30:09 AM', color: '#eab308' },
-  { id: 4, type: 'Safe',                camera: 'Camera 1', zone: 'Zone B', time: '10:30:07 AM', color: '#22c55e' },
-  { id: 5, type: 'No Helmet & No Vest', camera: 'Camera 1', zone: 'Zone A', time: '10:30:04 AM', color: '#ef4444' },
-]
-
-const mockZoneData = [
-  { name: 'Zone A', value: 42, color: '#ef4444' },
-  { name: 'Zone B', value: 28, color: '#f97316' },
-  { name: 'Zone C', value: 18, color: '#22c55e' },
-  { name: 'Zone D', value: 12, color: '#3b82f6' },
-]
-
-const DEMO_STREAM = proxyHlsUrl('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')
+// ---- Real-time data is fetched from backend API ----
 
 // ---- Sub-components ----
 
@@ -40,40 +17,11 @@ function StatCard({ value, label, color }) {
   )
 }
 
-function DetectionItem({ item }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: '10px',
-      padding: '10px 0', borderBottom: '1px solid var(--border)',
-    }}>
-      {/* Worker thumbnail */}
-      <div style={{
-        width: '44px', height: '44px', flexShrink: 0,
-        background: `${item.color}18`,
-        border: `1px solid ${item.color}40`,
-        borderRadius: '8px',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px',
-      }}>
-        {item.type === 'Safe' ? '✅' : '⚠️'}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '13px', fontWeight: '600', color: item.color, marginBottom: '2px' }}>
-          {item.type}
-        </div>
-        <div style={{ fontSize: '11px', color: '#8b949e' }}>
-          {item.camera} • {item.zone}
-        </div>
-      </div>
-      <div style={{ fontSize: '11px', color: '#8b949e', flexShrink: 0 }}>{item.time}</div>
-    </div>
-  )
-}
-
 // ---- Main Component ----
 export default function LiveMonitoringPage() {
   const videoRef   = useRef(null)
   const hlsRef     = useRef(null)
-  const [streamUrl, setStreamUrl]   = useState(DEMO_STREAM)
+  const [streamUrl, setStreamUrl]   = useState('')
   const [inputUrl,  setInputUrl]    = useState('')
   const [isLive,    setIsLive]      = useState(false)
   const [muted,     setMuted]       = useState(true)
@@ -206,11 +154,6 @@ export default function LiveMonitoringPage() {
                 border: 'none', borderRadius: '6px', color: 'white',
                 fontSize: '13px', cursor: 'pointer',
               }}>Load</button>
-              <button onClick={() => { loadStream(DEMO_STREAM); setShowUrlInput(false) }} style={{
-                padding: '8px 16px', background: 'var(--bg-hover)',
-                border: '1px solid var(--border)', borderRadius: '6px', color: '#8b949e',
-                fontSize: '12px', cursor: 'pointer',
-              }}>Use Demo</button>
             </div>
           )}
 
@@ -249,14 +192,6 @@ export default function LiveMonitoringPage() {
               }}>
                 <div style={{ fontSize: '36px', marginBottom: '10px' }}>📡</div>
                 {hlsError}
-                <button
-                  onClick={() => loadStream(DEMO_STREAM)}
-                  style={{
-                    marginTop: '14px', padding: '8px 20px',
-                    background: 'var(--accent-blue)', border: 'none',
-                    borderRadius: '6px', color: 'white', cursor: 'pointer',
-                  }}
-                >Load Demo Stream</button>
               </div>
             )}
           </div>
@@ -302,21 +237,23 @@ export default function LiveMonitoringPage() {
               <span style={{ fontSize: '14px', fontWeight: '600', color: '#e6edf3' }}>Real-time Detections</span>
               <span style={{ fontSize: '12px', color: '#3b82f6', cursor: 'pointer' }}>View All</span>
             </div>
-            {mockDetections.map(d => <DetectionItem key={d.id} item={d} />)}
+            <div style={{ color: '#8b949e', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+              No detections yet. Connect a live stream to start monitoring.
+            </div>
           </div>
 
           {/* Live Summary */}
           <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
             <div style={{ fontSize: '14px', fontWeight: '600', color: '#e6edf3', marginBottom: '12px' }}>Live Summary</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '10px' }}>
-              <StatCard value="128" label="Total Workers" color="#3b82f6" />
-              <StatCard value="85"  label="Compliant"     color="#22c55e" />
-              <StatCard value="24"  label="No Helmet"     color="#f97316" />
+              <StatCard value="--" label="Total Workers" color="#3b82f6" />
+              <StatCard value="--"  label="Compliant"     color="#22c55e" />
+              <StatCard value="--"  label="No Helmet"     color="#f97316" />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-              <StatCard value="13"    label="No Vest"          color="#eab308" />
-              <StatCard value="6"     label="No Helmet+Vest"   color="#ef4444" />
-              <StatCard value="66.4%" label="Compliance"        color="#a855f7" />
+              <StatCard value="--"    label="No Vest"          color="#eab308" />
+              <StatCard value="--"     label="No Helmet+Vest"   color="#ef4444" />
+              <StatCard value="--" label="Compliance"        color="#a855f7" />
             </div>
           </div>
 
@@ -334,7 +271,7 @@ export default function LiveMonitoringPage() {
             Violation Trend (Today)
           </div>
           <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={mockTrendData}>
+            <LineChart data={[]}>
               <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#8b949e' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#8b949e' }} axisLine={false} tickLine={false} />
               <Tooltip
@@ -363,20 +300,14 @@ export default function LiveMonitoringPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <PieChart width={150} height={150}>
-              <Pie data={mockZoneData} cx={70} cy={70} innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
-                {mockZoneData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+              <Pie data={[]} cx={70} cy={70} innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
+                
               </Pie>
             </PieChart>
             <div style={{ flex: 1 }}>
-              {mockZoneData.map(z => (
-                <div key={z.name} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                    <div style={{ width: '10px', height: '10px', background: z.color, borderRadius: '50%' }} />
-                    <span style={{ fontSize: '12px', color: '#e6edf3' }}>{z.name}</span>
-                  </div>
-                  <span style={{ fontSize: '12px', color: '#8b949e' }}>{z.value} ({z.value}%)</span>
-                </div>
-              ))}
+              <div style={{ color: '#8b949e', fontSize: '13px', textAlign: 'center', padding: '10px' }}>
+                No zone data available yet.
+              </div>
             </div>
           </div>
         </div>

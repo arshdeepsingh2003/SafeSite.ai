@@ -6,7 +6,6 @@
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
-import Hls from 'hls.js'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -17,9 +16,6 @@ import { useSoundSettings } from '../../context/SoundContext'
 import { playAlarm, playBeep } from '../../services/soundService'
 import LiveAIInsight        from '../ui/LiveAIInsight'
 import api   from '../../services/api'
-import toast from 'react-hot-toast'
-
-const DEMO_STREAM = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
 
 // ── Stat Card ─────────────────────────────────────────────────
 function StatCard({ icon, label, value, sub, color, subColor }) {
@@ -86,7 +82,6 @@ export default function DashboardPage() {
   const [isLive,      setIsLive]      = useState(false)
   const [muted,       setMuted]       = useState(true)
   const videoRef = useRef(null)
-  const hlsRef   = useRef(null)
 
   // ── Load dashboard stats ─────────────────────────────────
   useEffect(() => {
@@ -110,22 +105,8 @@ export default function DashboardPage() {
     else playBeep()
   }, [lastAlert, soundEnabled])
 
-  // ── Load HLS stream ──────────────────────────────────────
-  useEffect(() => {
-    if (!videoRef.current) return
-    if (Hls.isSupported()) {
-      const hls = new Hls()
-      hlsRef.current = hls
-      hls.loadSource(DEMO_STREAM)
-      hls.attachMedia(videoRef.current)
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        videoRef.current.play().catch(() => {})
-        setIsLive(true)
-      })
-      hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) setIsLive(false) })
-    }
-    return () => { if (hlsRef.current) hlsRef.current.destroy() }
-  }, [])
+  // ── Live stream loading (provide stream URL to connect) ──
+  // Stream will be shown when a valid HLS URL is provided
 
   // ── Derived display values ───────────────────────────────
   const s          = stats
