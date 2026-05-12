@@ -34,3 +34,4 @@ ai-service/model/*.pth
 *.log
 
 output/
+uploads/

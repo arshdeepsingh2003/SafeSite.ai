@@ -1,12 +1,45 @@
 // ============================================================
-// SafeSite AI — Video Upload & Analysis Page  (Phase 3 + 4)
+// SafeSite AI — Video Upload & Analysis Page  (Phase 3 + 4 + Detection Output)
 // File: frontend/src/components/pages/VideoUploadPage.jsx
 // ============================================================
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useVideoUpload } from '../../hooks/useVideoUpload'
 import { useAnalysis }    from '../../hooks/useAnalysis'
 import AnalysisResultCard from '../ui/AnalysisResultCard'
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+function makeFullUrl(relativeUrl) {
+  if (!relativeUrl) return null
+  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+    return relativeUrl
+  }
+  return `${API_URL}${relativeUrl}`
+}
+
+function findDetectionsForTime(frameDetections, currentTimeSec) {
+  if (!frameDetections || frameDetections.length === 0) {
+    return { detections: [], total_workers: 0, violations: 0 }
+  }
+
+  let bestMatch = frameDetections[0]
+  let smallestDiff = Math.abs(bestMatch.timestamp_sec - currentTimeSec)
+
+  for (let i = 1; i < frameDetections.length; i++) {
+    const diff = Math.abs(frameDetections[i].timestamp_sec - currentTimeSec)
+    if (diff < smallestDiff) {
+      smallestDiff = diff
+      bestMatch = frameDetections[i]
+    }
+  }
+
+  return {
+    detections: bestMatch.detections || [],
+    total_workers: bestMatch.total_workers || 0,
+    violations: bestMatch.violations || 0,
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -25,6 +58,50 @@ function StatusBadge({ status = 'uploaded' }) {
       background: s.bg, color: s.color, border: `1px solid ${s.border}`,
       textTransform: 'capitalize',
     }}>{status}</span>
+  )
+}
+
+const VIOLATION_COLORS = {
+  no_helmet: '#f97316',
+  no_vest: '#eab308',
+  no_helmet_and_no_vest: '#ef4444',
+  compliant: '#22c55e',
+  none: '#22c55e',
+}
+
+function DetectionItem({ det }) {
+  const vtype = det.violation || 'compliant'
+  const isCompliant = vtype === 'none' || det.severity === 'safe'
+  const color = isCompliant ? '#22c55e' : (VIOLATION_COLORS[vtype] || '#8b949e')
+  const label = det.label || vtype.replace(/_/g, ' ')
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '10px',
+      padding: '8px 10px',
+      background: `${color}10`,
+      border: `1px solid ${color}30`,
+      borderRadius: '8px', marginBottom: '6px',
+    }}>
+      <div style={{
+        width: '8px', height: '8px', borderRadius: '50%',
+        background: color, flexShrink: 0,
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '12px', fontWeight: '600', color: '#e6edf3' }}>
+          Worker #{det.worker_id || '?'}
+        </div>
+        <div style={{ fontSize: '11px', color }}>
+          {label}
+        </div>
+      </div>
+      {det.has_helmet !== undefined && (
+        <span style={{ fontSize: '14px' }}>
+          {det.has_helmet ? '⛑️' : '❌'}
+          {det.has_vest ? '🦺' : '❌'}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -95,7 +172,7 @@ export default function VideoUploadPage() {
     uploadFile, registerStream, deleteVideo,
   } = useVideoUpload()
 
-  const { startAnalysis, analysisStatus, analysisResults } = useAnalysis()
+  const { startAnalysis, analysisStatus, analysisResults, fullAnalysisData } = useAnalysis()
 
   const [dragOver,     setDragOver]     = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -105,6 +182,15 @@ export default function VideoUploadPage() {
   const [cameraName,   setCameraName]   = useState('Camera 1')
   const [lastUploadId, setLastUploadId] = useState(null)
   const fileInputRef = useRef(null)
+
+  // ── Detection Output refs and state ──
+  const outputVideoRef = useRef(null)
+  const outputCanvasRef = useRef(null)
+  const outputAnimRef = useRef(null)
+  const outputDetectionsRef = useRef([])
+  const [outputPlaying, setOutputPlaying] = useState(false)
+  const [currentOutputDetections, setCurrentOutputDetections] = useState([])
+  const [currentOutputStats, setCurrentOutputStats] = useState({ total: 0, violations: 0 })
 
   const ALLOWED_EXTS = ['mp4', 'mov', 'avi', 'mkv']
 
@@ -151,6 +237,146 @@ export default function VideoUploadPage() {
   // Find the result for the most recently uploaded video
   const lastResult = lastUploadId ? analysisResults[lastUploadId] : null
   const lastStatus = lastUploadId ? analysisStatus[lastUploadId] : null
+  const lastFullData = lastUploadId ? fullAnalysisData[lastUploadId] : null
+
+  // Get URLs for detection output
+  const lastVideo = lastUploadId ? videos.find(v => v.id === lastUploadId) : null
+  const originalVideoUrl = lastVideo?.stored_name
+    ? makeFullUrl(`/uploads/videos/${lastVideo.stored_name}`)
+    : null
+  const annotatedVideoUrl = lastFullData?.annotated_video_url
+    ? makeFullUrl(lastFullData.annotated_video_url)
+    : null
+  const frameDetections = lastFullData?.frame_detections || []
+  const hasFrameDetections = frameDetections.length > 0
+
+  // ── Canvas sync and draw functions ──
+  function syncOutputCanvasSize() {
+    const canvas = outputCanvasRef.current
+    const video = outputVideoRef.current
+    if (!canvas || !video) return
+    const rect = video.getBoundingClientRect()
+    if (rect.width > 0 && rect.height > 0) {
+      canvas.width = rect.width
+      canvas.height = rect.height
+    }
+  }
+
+  // ── Canvas drawing effect ──
+  useEffect(() => {
+    const canvas = outputCanvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      const w = canvas.width
+      const h = canvas.height
+
+      if (w === 0 || h === 0) {
+        outputAnimRef.current = requestAnimationFrame(draw)
+        return
+      }
+
+      const dets = outputDetectionsRef.current || []
+
+      for (const det of dets) {
+        const bbox = det.bbox
+        if (!bbox || bbox.length < 4) continue
+
+        const x1 = bbox[0] * w
+        const y1 = bbox[1] * h
+        const bw = (bbox[2] - bbox[0]) * w
+        const bh = (bbox[3] - bbox[1]) * h
+        const color = det.color_hex || (det.severity === 'safe' ? '#22c55e' : '#ef4444')
+        const label = det.label || det.violation || 'unknown'
+
+        ctx.strokeStyle = color
+        ctx.lineWidth = 2.5
+        ctx.strokeRect(x1, y1, bw, bh)
+
+        ctx.fillStyle = `${color}20`
+        ctx.fillRect(x1, y1, bw, bh)
+
+        const text = label
+        ctx.font = 'bold 12px monospace'
+        const tw = ctx.measureText(text).width
+        const lh = 20
+
+        ctx.fillStyle = color
+        ctx.fillRect(x1, y1 - lh, tw + 8, lh)
+
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(text, x1 + 4, y1 - 5)
+
+        if (det.worker_id) {
+          const idText = `#${det.worker_id}`
+          ctx.font = 'bold 10px monospace'
+          ctx.fillStyle = color
+          ctx.fillText(idText, x1 + 4, y1 + bh - 4)
+        }
+      }
+
+      outputAnimRef.current = requestAnimationFrame(draw)
+    }
+
+    outputAnimRef.current = requestAnimationFrame(draw)
+    return () => {
+      if (outputAnimRef.current) cancelAnimationFrame(outputAnimRef.current)
+    }
+  }, [hasFrameDetections])
+
+  // ── Video time update handler ──
+  function handleOutputTimeUpdate() {
+    const video = outputVideoRef.current
+    if (!video || !hasFrameDetections) return
+
+    const currentTime = video.currentTime
+    const result = findDetectionsForTime(frameDetections, currentTime)
+
+    outputDetectionsRef.current = result.detections
+    setCurrentOutputDetections(result.detections)
+    setCurrentOutputStats({
+      total: result.total_workers,
+      violations: result.violations,
+    })
+  }
+
+  // ── Setup event listeners when video is available ──
+  useEffect(() => {
+    if (!lastFullData || !hasFrameDetections) return
+
+    const video = outputVideoRef.current
+    if (!video) return
+
+    const handleLoadedMetadata = syncOutputCanvasSize
+    const handlePlay = () => { setOutputPlaying(true); syncOutputCanvasSize() }
+    const handlePause = () => setOutputPlaying(false)
+    const handleResize = syncOutputCanvasSize
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata)
+    video.addEventListener('play', handlePlay)
+    video.addEventListener('pause', handlePause)
+    video.addEventListener('timeupdate', handleOutputTimeUpdate)
+    window.addEventListener('resize', handleResize)
+
+    // Reset detections ref
+    outputDetectionsRef.current = []
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      video.removeEventListener('play', handlePlay)
+      video.removeEventListener('pause', handlePause)
+      video.removeEventListener('timeupdate', handleOutputTimeUpdate)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [lastFullData, hasFrameDetections])
+
+  // ── Helper to get display video URL ──
+  // Use annotated video if available (though mp4v may not play in browsers)
+  // Fallback to original video + canvas overlay
+  const displayVideoUrl = originalVideoUrl
 
   return (
     <div>
@@ -449,13 +675,322 @@ export default function VideoUploadPage() {
               </div>
             ))}
           </div>
-        </div>
+         </div>
 
-      </div>
+       </div>
 
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
-    </div>
-  )
-}
+       {/* ── Detection Output Section (shown after analysis completes) ── */}
+       {lastFullData && lastStatus === 'completed' && (
+         <div style={{ marginTop: '24px' }}>
+           <div style={{
+             background: 'var(--bg-secondary)',
+             border: '1px solid var(--border)',
+             borderRadius: '12px',
+             padding: '24px',
+           }}>
+             <div style={{
+               display: 'flex',
+               justifyContent: 'space-between',
+               alignItems: 'center',
+               marginBottom: '16px',
+             }}>
+               <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#e6edf3', margin: 0 }}>
+                 🔍 Detection Output
+               </h2>
+               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                 {hasFrameDetections && (
+                   <span style={{
+                     fontSize: '11px',
+                     padding: '4px 10px',
+                     background: 'rgba(34,197,94,0.15)',
+                     color: '#22c55e',
+                     borderRadius: '12px',
+                     fontWeight: '600',
+                   }}>
+                     Live Canvas Overlay Active
+                   </span>
+                 )}
+                 {frameDetections.length > 0 && (
+                   <span style={{ fontSize: '11px', color: '#8b949e' }}>
+                     {frameDetections.length} sampled frames analyzed
+                   </span>
+                 )}
+               </div>
+             </div>
+
+             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+               {/* ── LEFT: Video Player with Canvas Overlay ── */}
+               <div>
+                 <div style={{
+                   position: 'relative',
+                   width: '100%',
+                   aspectRatio: '16/9',
+                   background: '#000',
+                   borderRadius: '10px',
+                   overflow: 'hidden',
+                   border: '1px solid var(--border)',
+                 }}>
+                   {displayVideoUrl ? (
+                     <>
+                       <video
+                         ref={outputVideoRef}
+                         controls
+                         src={displayVideoUrl}
+                         style={{
+                           width: '100%',
+                           height: '100%',
+                           objectFit: 'contain',
+                         }}
+                       />
+                       {hasFrameDetections && (
+                         <canvas
+                           ref={outputCanvasRef}
+                           style={{
+                             position: 'absolute',
+                             top: 0,
+                             left: 0,
+                             width: '100%',
+                             height: '100%',
+                             pointerEvents: 'none',
+                           }}
+                         />
+                       )}
+                     </>
+                   ) : (
+                     <div style={{
+                       display: 'flex',
+                       flexDirection: 'column',
+                       alignItems: 'center',
+                       justifyContent: 'center',
+                       height: '100%',
+                       color: '#8b949e',
+                     }}>
+                       <div style={{ fontSize: '36px', marginBottom: '10px' }}>🎬</div>
+                       <div style={{ fontSize: '13px' }}>Video will appear here after upload</div>
+                     </div>
+                   )}
+
+                   {/* Stats overlay */}
+                   {displayVideoUrl && outputPlaying && (
+                     <div style={{
+                       position: 'absolute',
+                       bottom: '50px',
+                       right: '12px',
+                       background: 'rgba(0,0,0,0.75)',
+                       borderRadius: '6px',
+                       padding: '6px 10px',
+                       fontSize: '11px',
+                       color: 'white',
+                     }}>
+                       <div>Workers: <strong>{currentOutputStats.total}</strong></div>
+                       <div>Violations: <strong style={{ color: '#ef4444' }}>{currentOutputStats.violations}</strong></div>
+                     </div>
+                   )}
+                 </div>
+
+                 {/* Video info */}
+                 {lastFullData?.video_info && (
+                   <div style={{
+                     marginTop: '12px',
+                     padding: '10px 14px',
+                     background: 'var(--bg-primary)',
+                     borderRadius: '8px',
+                     display: 'flex',
+                     gap: '20px',
+                     flexWrap: 'wrap',
+                     fontSize: '12px',
+                     color: '#8b949e',
+                   }}>
+                     <span>📐 {lastFullData.video_info.width} × {lastFullData.video_info.height}</span>
+                     <span>🎞️ {lastFullData.video_info.fps?.toFixed(1) || 30} FPS</span>
+                     <span>⏱️ {lastFullData.video_info.duration_sec?.toFixed(1) || 0}s</span>
+                     <span>⚙️ Processed in {lastFullData.processing_time_sec?.toFixed(1) || 0}s</span>
+                   </div>
+                 )}
+               </div>
+
+               {/* ── RIGHT: Live Detections Panel ── */}
+               <div>
+                 <div style={{
+                   background: 'var(--bg-primary)',
+                   borderRadius: '10px',
+                   padding: '16px',
+                   height: '100%',
+                   minHeight: '300px',
+                   display: 'flex',
+                   flexDirection: 'column',
+                 }}>
+                   <div style={{
+                     display: 'flex',
+                     justifyContent: 'space-between',
+                     alignItems: 'center',
+                     marginBottom: '12px',
+                   }}>
+                     <h3 style={{
+                       fontSize: '13px',
+                       fontWeight: '600',
+                       color: '#e6edf3',
+                       margin: 0,
+                     }}>
+                       Current Detections
+                     </h3>
+                     {currentOutputDetections.length > 0 && (
+                       <span style={{
+                         fontSize: '11px',
+                         fontWeight: '600',
+                         color: '#6366f1',
+                       }}>
+                         {currentOutputDetections.length} detected
+                       </span>
+                     )}
+                   </div>
+
+                   <div style={{ flex: 1, overflowY: 'auto' }}>
+                     {!displayVideoUrl ? (
+                       <div style={{
+                         textAlign: 'center',
+                         padding: '40px 20px',
+                         color: '#8b949e',
+                         fontSize: '12px',
+                       }}>
+                         <div style={{ fontSize: '28px', marginBottom: '8px' }}>👁️</div>
+                         Upload and analyze a video to see detections
+                       </div>
+                     ) : currentOutputDetections.length === 0 ? (
+                       <div style={{
+                         textAlign: 'center',
+                         padding: '40px 20px',
+                         color: '#8b949e',
+                         fontSize: '12px',
+                       }}>
+                         <div style={{ fontSize: '28px', marginBottom: '8px' }}>▶️</div>
+                         Play the video to see live detections
+                       </div>
+                     ) : (
+                       currentOutputDetections.map((det, idx) => (
+                         <DetectionItem key={`${det.worker_id}-${idx}`} det={det} />
+                       ))
+                     )}
+                   </div>
+
+                   {/* Summary stats */}
+                   {lastFullData?.summary && (
+                     <div style={{
+                       marginTop: '16px',
+                       paddingTop: '16px',
+                       borderTop: '1px solid var(--border)',
+                     }}>
+                       <div style={{
+                         display: 'grid',
+                         gridTemplateColumns: '1fr 1fr',
+                         gap: '8px',
+                         marginBottom: '12px',
+                       }}>
+                         <div style={{
+                           textAlign: 'center',
+                           padding: '10px',
+                           background: 'rgba(34,197,94,0.1)',
+                           borderRadius: '8px',
+                         }}>
+                           <div style={{ fontSize: '18px', fontWeight: '700', color: '#22c55e' }}>
+                             {lastFullData.summary.compliant_workers || 0}
+                           </div>
+                           <div style={{ fontSize: '10px', color: '#8b949e' }}>Compliant</div>
+                         </div>
+                         <div style={{
+                           textAlign: 'center',
+                           padding: '10px',
+                           background: 'rgba(239,68,68,0.1)',
+                           borderRadius: '8px',
+                         }}>
+                           <div style={{ fontSize: '18px', fontWeight: '700', color: '#ef4444' }}>
+                             {lastFullData.summary.violation_workers || 0}
+                           </div>
+                           <div style={{ fontSize: '10px', color: '#8b949e' }}>Violations</div>
+                         </div>
+                       </div>
+                       <div style={{
+                         textAlign: 'center',
+                         padding: '10px',
+                         background: 'rgba(99,102,241,0.1)',
+                         borderRadius: '8px',
+                       }}>
+                         <div style={{ fontSize: '20px', fontWeight: '700', color: '#6366f1' }}>
+                           {lastFullData.summary.compliance_rate || 0}%
+                         </div>
+                         <div style={{ fontSize: '11px', color: '#8b949e' }}>Compliance Rate</div>
+                       </div>
+                     </div>
+                   )}
+                 </div>
+               </div>
+             </div>
+
+             {/* Worker Summary Section */}
+             {lastFullData?.workers && lastFullData.workers.length > 0 && (
+               <div style={{ marginTop: '20px' }}>
+                 <h3 style={{
+                   fontSize: '13px',
+                   fontWeight: '600',
+                   color: '#e6edf3',
+                   marginBottom: '12px',
+                 }}>
+                   📋 All Tracked Workers ({lastFullData.workers.length} total)
+                 </h3>
+                 <div style={{
+                   display: 'grid',
+                   gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                   gap: '8px',
+                 }}>
+                   {lastFullData.workers.map((worker) => {
+                     const isViolation = worker.violation !== 'none' && worker.severity !== 'safe'
+                     const color = worker.color_hex || (isViolation ? '#ef4444' : '#22c55e')
+                     return (
+                       <div key={worker.worker_id} style={{
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '10px',
+                         padding: '10px 12px',
+                         background: `${color}10`,
+                         border: `1px solid ${color}30`,
+                         borderRadius: '8px',
+                       }}>
+                         <div style={{
+                           width: '10px',
+                           height: '10px',
+                           borderRadius: '50%',
+                           background: color,
+                           flexShrink: 0,
+                         }} />
+                         <div style={{ flex: 1, minWidth: 0 }}>
+                           <div style={{
+                             fontSize: '12px',
+                             fontWeight: '600',
+                             color: '#e6edf3',
+                           }}>
+                             Worker #{worker.worker_id}
+                           </div>
+                           <div style={{ fontSize: '11px', color }}>
+                             {worker.label || (isViolation ? 'Violation' : 'Compliant')}
+                           </div>
+                         </div>
+                         <div style={{ fontSize: '13px' }}>
+                           {worker.has_helmet ? '⛑️' : '❌'}
+                           {worker.has_vest ? '🦺' : '❌'}
+                         </div>
+                       </div>
+                     )
+                   })}
+                 </div>
+               </div>
+             )}
+           </div>
+         </div>
+       )}
+
+       <style>{`
+         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+       `}</style>
+     </div>
+   )
+ }

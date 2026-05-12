@@ -41,13 +41,24 @@ async def receive_ai_results(video_id: str, results: dict):
         raise HTTPException(status_code=404, detail="Video not found")
 
     # 1. Update video to completed
-    # Strip frame_results before storing — huge and not needed by the frontend
-    stored_results = {k: v for k, v in results.items() if k != "frame_results"}
+    # Keep important fields: workers, violations, frame_detections, output_filename, etc.
+    # We don't strip frame_detections anymore - it's normalized and needed for canvas overlay
+    stored_results = results
+    
+    # Build annotated video URL if we have the filename
+    # The video is saved to uploads/annotated/ which is served at /uploads/annotated/
+    annotated_video_url = None
+    output_filename = results.get("output_filename")
+    if output_filename:
+        annotated_video_url = f"/uploads/annotated/{output_filename}"
+    
     await db["videos"].update_one(
         {"_id": oid},
         {"$set": {
             "status": "completed",
             "analysis_result": stored_results,
+            "annotated_video_url": annotated_video_url,
+            "output_filename": output_filename,
             "analyzed_at": datetime.utcnow(),
         }}
     )
@@ -206,6 +217,7 @@ async def get_analysis_status(video_id: str):
     """
     Check the processing status of a video.
     Frontend polls this every 3 seconds while status = "processing".
+    When completed, returns full detection data for frontend canvas overlay.
     """
     try:
         video = await db["videos"].find_one({"_id": ObjectId(video_id)})
@@ -222,12 +234,72 @@ async def get_analysis_status(video_id: str):
         "uploaded_at": str(video.get("uploaded_at", "")),
     }
 
-    # Include summary when done
+    # Include annotated video URL if available
+    if video.get("annotated_video_url"):
+        response["annotated_video_url"] = video.get("annotated_video_url")
+
+    # Include full detection data when done
     if video.get("status") == "completed" and video.get("analysis_result"):
-        response["summary"]     = video["analysis_result"].get("summary", {})
+        result = video["analysis_result"]
+        response["summary"] = result.get("summary", {})
         response["analyzed_at"] = str(video.get("analyzed_at", ""))
+        response["workers"] = result.get("workers", [])
+        response["violations"] = result.get("violations", [])
+        response["video_info"] = result.get("video_info", {})
+        response["processing_time_sec"] = result.get("processing_time_sec")
+        
+        # Include frame_detections for canvas overlay (normalized coordinates)
+        # This can be large, so frontend can request full details separately if needed
+        frame_dets = result.get("frame_detections", [])
+        if frame_dets:
+            response["has_frame_detections"] = True
+            response["frame_count"] = len(frame_dets)
+            # Only include first 2 frames as preview - frontend should use /ai/results/{id} for full data
+            response["frame_detections_preview"] = frame_dets[:2]
 
     if video.get("status") == "error":
         response["error_message"] = video.get("error_message", "Unknown error")
+
+    return response
+
+
+# ── GET /ai/results/{video_id} ────────────────────────────────
+# Get full analysis results including all frame detections
+@router.get("/results/{video_id}")
+async def get_full_analysis_results(video_id: str):
+    """
+    Get complete analysis results for a video including:
+    - All frame-by-frame detections (normalized coordinates for canvas)
+    - Worker summary
+    - Violation events
+    - Annotated video URL
+    """
+    try:
+        video = await db["videos"].find_one({"_id": ObjectId(video_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid video ID")
+
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    result = video.get("analysis_result", {})
+    
+    response = {
+        "video_id": video_id,
+        "status": video.get("status", "uploaded"),
+        "zone": video.get("zone"),
+        "annotated_video_url": video.get("annotated_video_url"),
+        "output_filename": video.get("output_filename"),
+        "file_url": video.get("file_url"),
+    }
+
+    if result:
+        response["summary"] = result.get("summary", {})
+        response["workers"] = result.get("workers", [])
+        response["violations"] = result.get("violations", [])
+        response["video_info"] = result.get("video_info", {})
+        response["frame_detections"] = result.get("frame_detections", [])
+        response["processing_time_sec"] = result.get("processing_time_sec")
+        response["analyzed_at"] = str(video.get("analyzed_at", ""))
 
     return response

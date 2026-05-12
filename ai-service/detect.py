@@ -400,7 +400,10 @@ PPE_RATIO_THRESHOLD     = float(os.getenv("PPE_RATIO_THRESHOLD", 0.7))
 VIOLATION_END_FRAMES = int(os.getenv("VIOLATION_END_FRAMES", 5))  # Frames with PPE needed to end violation
 
 # Where to save annotated output videos
-OUTPUT_DIR = "output"
+# Save to backend's uploads/annotated folder so it's served via static files
+AI_SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(AI_SERVICE_DIR)
+OUTPUT_DIR = os.path.join(BACKEND_DIR, "uploads", "annotated")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
@@ -738,16 +741,22 @@ def process_video(video_path: str, video_id: str = None, zone: str = "Zone A") -
 
     # ── Set up output video writer ────────────────────────────
     # We'll save an annotated copy of the video with bounding boxes
-    output_filename = f"annotated_{os.path.basename(video_path)}"
-    # Use .mp4 extension always
-    output_filename = os.path.splitext(output_filename)[0] + ".mp4"
+    # Use video_id in filename for unique identification
+    base_name = os.path.splitext(os.path.basename(video_path))[0]
+    if video_id:
+        output_filename = f"annotated_{video_id}_{base_name}.mp4"
+    else:
+        output_filename = f"annotated_{base_name}.mp4"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
 
+    # Use mp4v codec (MPEG-4) - widely supported. For H.264, OpenCV needs to be built with H.264 support.
+    # Fallback: if mp4v fails, try other codecs
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     # ── Process frames ────────────────────────────────────────
     frame_results  = []       # Results for every SAMPLED frame
+    frame_detections = []      # Normalized detections for frontend canvas overlay
     frame_count    = 0
     processed_count = 0
     last_frame_detections = []  # Keep the last result for non-sampled frames
@@ -760,6 +769,7 @@ def process_video(video_path: str, video_id: str = None, zone: str = "Zone A") -
             break  # End of video
 
         frame_count += 1
+        timestamp_sec = (frame_count - 1) / fps if fps > 0 else 0
 
         # ── FRAME SAMPLING ────────────────────────────────────
         if frame_count % FRAME_SAMPLE_RATE == 0:
@@ -769,6 +779,36 @@ def process_video(video_path: str, video_id: str = None, zone: str = "Zone A") -
             # Save original workers with color for annotation on non-sampled frames
             last_frame_detections = frame_result.get("_workers_with_color") or frame_result["detections"]
             processed_count += 1
+
+            # Build normalized detections for frontend canvas (convert to 0-1 range)
+            normalized_dets = []
+            for det in frame_result["detections"]:
+                bbox = det.get("bbox")
+                if bbox and len(bbox) == 4:
+                    # Normalize absolute pixel coordinates to 0-1 range
+                    nx1 = round(bbox[0] / width, 6)
+                    ny1 = round(bbox[1] / height, 6)
+                    nx2 = round(bbox[2] / width, 6)
+                    ny2 = round(bbox[3] / height, 6)
+                    normalized_dets.append({
+                        "worker_id": det.get("worker_id"),
+                        "label": det.get("label"),
+                        "violation": det.get("violation"),
+                        "severity": det.get("severity"),
+                        "color_hex": det.get("color_hex"),
+                        "bbox": [nx1, ny1, nx2, ny2],
+                        "has_helmet": det.get("has_helmet"),
+                        "has_vest": det.get("has_vest"),
+                    })
+
+            # Store this frame's detections for frontend overlay
+            frame_detections.append({
+                "frame": frame_count,
+                "timestamp_sec": round(timestamp_sec, 3),
+                "detections": normalized_dets,
+                "total_workers": frame_result["summary"].get("total_workers", 0),
+                "violations": frame_result["summary"].get("violations", 0),
+            })
 
             # Print progress every 50 processed frames
             if processed_count % 50 == 0:
@@ -830,6 +870,7 @@ def process_video(video_path: str, video_id: str = None, zone: str = "Zone A") -
         "video_id":        video_id,
         "video_path":      video_path,
         "output_path":     output_path,
+        "output_filename": output_filename,
         "zone":            zone,
         "analyzed_at":     datetime.utcnow().isoformat(),
         "processing_time_sec": round(elapsed, 2),
@@ -841,6 +882,7 @@ def process_video(video_path: str, video_id: str = None, zone: str = "Zone A") -
             "duration_sec":  round(duration_sec, 2),
             "sampled_frames": processed_count,
         },
+        "frame_detections": frame_detections,
         "summary": {
             "total_workers":            total_workers,
             "compliant_workers":        compliant_workers,
@@ -889,12 +931,20 @@ def _send_results_to_backend(video_id: str, results: dict):
       3. Create Alert documents for high-severity violations
     """
     url = f"{BACKEND_URL}/ai/results/{video_id}"
-    # Exclude frame_results — huge, not needed by backend, contains non-serializable tuples
-    payload = {k: v for k, v in results.items() if k != "frame_results"}
+    # Exclude:
+    #   - frame_results — huge, not needed, contains non-serializable tuples
+    #   - _workers_with_color — internal only
+    # Keep:
+    #   - frame_detections — NEW: normalized per-frame detections for frontend canvas
+    #   - output_filename, output_path — for annotated video serving
+    keys_to_exclude = {"frame_results", "_workers_with_color"}
+    payload = {k: v for k, v in results.items() if k not in keys_to_exclude}
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(url, json=payload, timeout=60)
         if response.status_code == 200:
             print(f"✅ Results sent to backend successfully")
+            print(f"   Annotated video: {payload.get('output_filename', 'N/A')}")
+            print(f"   Frame detections: {len(payload.get('frame_detections', []))} sampled frames")
         else:
             print(f"⚠️  Backend returned status {response.status_code}: {response.text}")
     except requests.exceptions.ConnectionError:

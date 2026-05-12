@@ -43,6 +43,7 @@ class VideoInDB(BaseModel):
 class VideoResponse(BaseModel):
     id: str
     original_name: Optional[str] = None
+    stored_name: Optional[str] = None
     file_size_mb: Optional[float] = None
     camera_name: Optional[str] = None
     site_id: str
@@ -51,3 +52,4 @@ class VideoResponse(BaseModel):
     status: VideoStatus
     uploaded_at: datetime
     analysis_result: Optional[dict] = None
+    annotated_video_url: Optional[str] = None

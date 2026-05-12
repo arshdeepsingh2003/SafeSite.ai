@@ -13,8 +13,21 @@ import toast from 'react-hot-toast'
 
 export function useAnalysis() {
   const [analysisStatus, setAnalysisStatus] = useState({})  // { [videoId]: "processing"|"completed"|"error" }
-  const [analysisResults, setAnalysisResults] = useState({}) // { [videoId]: resultObject }
+  const [analysisResults, setAnalysisResults] = useState({}) // { [videoId]: summary }
+  const [fullAnalysisData, setFullAnalysisData] = useState({}) // { [videoId]: fullData including frame_detections }
   const pollingRefs = useRef({})  // Track polling intervals per video
+
+  // ── Fetch full analysis data (including frame_detections) ──
+  const fetchFullResults = useCallback(async (videoId) => {
+    try {
+      const res = await api.get(`/ai/results/${videoId}`)
+      setFullAnalysisData(prev => ({ ...prev, [videoId]: res.data }))
+      return res.data
+    } catch (err) {
+      console.error('Failed to fetch full analysis results:', err)
+      return null
+    }
+  }, [])
 
   // ── Trigger analysis on a video ──
   const startAnalysis = useCallback(async (videoId) => {
@@ -58,6 +71,9 @@ export function useAnalysis() {
             setAnalysisResults(prev => ({ ...prev, [videoId]: summary }))
           }
 
+          // Fetch full analysis data including frame_detections
+          await fetchFullResults(videoId)
+
           toast.success(`✅ Analysis complete! Compliance rate: ${summary?.compliance_rate ?? '?'}%`)
         }
 
@@ -72,7 +88,7 @@ export function useAnalysis() {
     }, 3000) // Poll every 3 seconds
 
     pollingRefs.current[videoId] = interval
-  }, [])
+  }, [fetchFullResults])
 
   // ── Manually check status once ──
   const checkStatus = useCallback(async (videoId) => {
@@ -91,7 +107,9 @@ export function useAnalysis() {
   return {
     startAnalysis,
     checkStatus,
-    analysisStatus,   // { videoId: status }
-    analysisResults,  // { videoId: summary }
+    fetchFullResults,
+    analysisStatus,     // { videoId: status }
+    analysisResults,    // { videoId: summary }
+    fullAnalysisData,   // { videoId: { frame_detections, workers, annotated_video_url, ... } }
   }
 }
