@@ -20,9 +20,6 @@ export default function Sidebar() {
     { path: '/alerts',          icon: '🚨', label: 'Alerts', badge: unreadCount },
     { path: '/analytics',       icon: '📈', label: 'Analytics'        },
     { path: '/reports',         icon: '📄', label: 'Reports'          },
-    { path: '/sites',           icon: '🏗️',  label: 'Sites'           },
-    { path: '/workers',         icon: '👷', label: 'Workers'          },
-    { path: '/settings',        icon: '⚙️',  label: 'Settings'        },
   ]
 
   const handleLogout = () => {

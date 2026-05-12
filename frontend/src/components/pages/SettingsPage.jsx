@@ -122,12 +122,7 @@ export default function SettingsPage() {
     { id: 'alerts',      icon: '🔔', label: 'Alert Settings',         desc: 'Configure alerts & notifications'   },
     { id: 'email',       icon: '📧', label: 'Email & Notifications',  desc: 'Email and notification settings'    },
     { id: 'users',       icon: '👥', label: 'User Management',        desc: 'Manage users & permissions'         },
-    { id: 'cameras',     icon: '📹', label: 'Camera Settings',        desc: 'Manage camera configurations'       },
-    { id: 'zones',       icon: '📍', label: 'Site & Zone Settings',   desc: 'Manage sites and zones'             },
     { id: 'storage',     icon: '💾', label: 'Data & Storage',         desc: 'Data retention and storage'         },
-    { id: 'integration', icon: '🔗', label: 'System Integration',     desc: 'Third-party integrations'           },
-    { id: 'backup',      icon: '🔄', label: 'Backup & Restore',       desc: 'Backup and restore system'          },
-    { id: 'audit',       icon: '📋', label: 'Audit Logs',             desc: 'View system activity logs'          },
   ]
 
   const generalTabs = [
@@ -496,78 +491,6 @@ export default function SettingsPage() {
     )
   }
 
-  function renderCameras() {
-    const cameras = settings.cameras || [
-      { id: 1, name: 'Camera 1', zone: 'Zone A', url: '', status: 'active' },
-      { id: 2, name: 'Camera 2', zone: 'Zone B', url: '', status: 'active' },
-    ]
-    return (
-      <>
-        <SectionHeader title="Camera Settings" description="Manage camera configurations and stream URLs" />
-        <SectionTitle>Camera Configuration</SectionTitle>
-        {cameras.map((cam, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'center', gap: '12px',
-            padding: '12px', marginBottom: '8px',
-            background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px',
-          }}>
-            <div style={{
-              width: '36px', height: '36px', flexShrink: 0, borderRadius: '8px',
-              background: 'rgba(59,130,246,0.1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px',
-            }}>📹</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#e6edf3' }}>{cam.name}</div>
-              <div style={{ fontSize: '11px', color: '#8b949e' }}>{cam.zone}</div>
-            </div>
-            <span style={{
-              padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600',
-              background: 'rgba(34,197,94,0.12)', color: '#22c55e',
-            }}>Active</span>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '14px' }}>✏️</button>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '14px' }}>🗑</button>
-          </div>
-        ))}
-        <button style={{
-          width: '100%', padding: '10px', marginTop: '10px',
-          background: 'transparent', border: '2px dashed var(--border)',
-          borderRadius: '8px', color: '#8b949e', cursor: 'pointer', fontSize: '13px',
-          transition: 'border-color 0.2s',
-        }}
-          onMouseEnter={e => e.target.style.borderColor = '#6366f1'}
-          onMouseLeave={e => e.target.style.borderColor = 'var(--border)'}
-        >+ Add Camera</button>
-      </>
-    )
-  }
-
-  function renderZones() {
-    const zones = settings.zones || ['Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E']
-    return (
-      <>
-        <SectionHeader title="Site & Zone Settings" description="Manage sites and monitoring zones" />
-        <SectionTitle>Zones</SectionTitle>
-        {zones.map((zone, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'center', gap: '12px',
-            padding: '10px 14px', marginBottom: '8px',
-            background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px',
-          }}>
-            <span style={{ fontSize: '14px' }}>📍</span>
-            <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#e6edf3' }}>{zone}</span>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '14px' }}>✏️</button>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '14px' }}>🗑</button>
-          </div>
-        ))}
-        <button style={{
-          width: '100%', padding: '10px', marginTop: '10px',
-          background: 'transparent', border: '2px dashed var(--border)',
-          borderRadius: '8px', color: '#8b949e', cursor: 'pointer', fontSize: '13px',
-        }}>+ Add Zone</button>
-      </>
-    )
-  }
-
   function renderStorage() {
     const used  = systemInfo?.storage?.used_gb  || 0
     const total = systemInfo?.storage?.total_gb || 200
@@ -625,135 +548,13 @@ export default function SettingsPage() {
     )
   }
 
-  function renderIntegration() {
-    return (
-      <>
-        <SectionHeader title="System Integration" description="Third-party API integrations and webhooks" />
-        <SectionTitle>API Configuration</SectionTitle>
-        <SettingRow icon="🔑" label="API Base URL" description="Backend API endpoint">
-          <input value="http://localhost:8000" readOnly style={{ ...inp, width: '220px', opacity: 0.7 }} />
-        </SettingRow>
-        <SettingRow icon="📡" label="WebSocket URL" description="Socket.IO endpoint for real-time">
-          <input value="ws://localhost:8000/socket.io" readOnly style={{ ...inp, width: '220px', opacity: 0.7 }} />
-        </SettingRow>
-
-        <SectionTitle>Groq LLM</SectionTitle>
-        <SettingRow icon="🤖" label="Groq API Key" description="Used for AI insights and report generation">
-          <input
-            type="password"
-            value={settings.groq_api_key || ''}
-            onChange={e => updateField('groq_api_key', e.target.value)}
-            placeholder="gsk_…"
-            style={{ ...inp, width: '240px' }}
-          />
-        </SettingRow>
-        <SettingRow icon="🧠" label="LLM Model" description="Groq model to use for AI summaries">
-          <select value={settings.groq_model || 'llama3-70b-8192'} onChange={e => updateField('groq_model', e.target.value)} style={{ ...sel, width: '220px' }}>
-            <option value="llama3-70b-8192">LLaMA3 70B (Best)</option>
-            <option value="llama3-8b-8192">LLaMA3 8B (Fast)</option>
-            <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
-          </select>
-        </SettingRow>
-
-        <div style={{ marginTop: '14px' }}>
-          <a href="http://localhost:8000/docs" target="_blank" rel="noreferrer" style={{
-            display: 'block', padding: '10px', textAlign: 'center',
-            background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)',
-            borderRadius: '7px', color: '#818cf8', fontSize: '12px',
-            fontWeight: '600', textDecoration: 'none',
-          }}>📖 View API Documentation →</a>
-        </div>
-      </>
-    )
-  }
-
-  function renderBackup() {
-    const backup = systemInfo?.backup || {}
-    return (
-      <>
-        <SectionHeader title="Backup & Restore" description="Manage system backups and restoration" />
-        <SectionTitle>Backup Status</SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-          {[
-            { label: 'Last Backup',  value: backup.last_backup ? new Date(backup.last_backup).toLocaleString() : 'Never' },
-            { label: 'Next Backup',  value: backup.next_backup ? new Date(backup.next_backup).toLocaleString() : 'Not scheduled' },
-            { label: 'Status',       value: backup.status || 'Unknown' },
-            { label: 'Total Backups', value: '12' },
-          ].map(row => (
-            <div key={row.label} style={{ padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '3px' }}>{row.label}</div>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#e6edf3' }}>{row.value}</div>
-            </div>
-          ))}
-        </div>
-        <button onClick={triggerBackup} style={{
-          width: '100%', padding: '12px',
-          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-          border: 'none', borderRadius: '8px', color: 'white',
-          fontWeight: '700', fontSize: '14px', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-        }}>☁️ Backup Now</button>
-
-        <SectionTitle>Auto Backup</SectionTitle>
-        <SettingRow icon="⏰" label="Auto Backup Schedule" description="Automatically backup every night at 2:00 AM">
-          <Toggle checked={settings.auto_backup !== false} onChange={v => updateField('auto_backup', v)} />
-        </SettingRow>
-        <SettingRow icon="🗑️" label="Auto-delete Old Backups" description="Keep only the last 30 backups">
-          <Toggle checked={settings.auto_delete_backups !== false} onChange={v => updateField('auto_delete_backups', v)} />
-        </SettingRow>
-      </>
-    )
-  }
-
-  function renderAudit() {
-    const logs = systemInfo?.audit_logs || [
-      { time: new Date().toISOString(), user: 'admin@safesite.com', action: 'Settings saved', type: 'settings' },
-      { time: new Date(Date.now()-3600000).toISOString(), user: 'admin@safesite.com', action: 'User created: john@company.com', type: 'user' },
-      { time: new Date(Date.now()-7200000).toISOString(), user: 'admin@safesite.com', action: 'Report generated: Daily Safety Report', type: 'report' },
-      { time: new Date(Date.now()-10800000).toISOString(), user: 'admin@safesite.com', action: 'Backup created', type: 'backup' },
-      { time: new Date(Date.now()-14400000).toISOString(), user: 'admin@safesite.com', action: 'Admin login', type: 'auth' },
-    ]
-    const typeColors = { settings: '#6366f1', user: '#f97316', report: '#22c55e', backup: '#3b82f6', auth: '#eab308' }
-    return (
-      <>
-        <SectionHeader title="Audit Logs" description="View system activity and user action history" />
-        {logs.map((log, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'flex-start', gap: '12px',
-            padding: '12px 0', borderBottom: '1px solid var(--border)',
-          }}>
-            <div style={{
-              width: '32px', height: '32px', flexShrink: 0, borderRadius: '8px',
-              background: `${typeColors[log.type] || '#8b949e'}18`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px',
-            }}>
-              {log.type === 'auth' ? '🔐' : log.type === 'user' ? '👤' : log.type === 'report' ? '📄' : log.type === 'backup' ? '💾' : '⚙️'}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#e6edf3', marginBottom: '2px' }}>{log.action}</div>
-              <div style={{ fontSize: '11px', color: '#8b949e' }}>{log.user}</div>
-            </div>
-            <div style={{ fontSize: '11px', color: '#8b949e', flexShrink: 0 }}>
-              {new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
-          </div>
-        ))}
-      </>
-    )
-  }
-
   const sectionRenderers = {
     general:     renderGeneral,
     detection:   renderDetection,
     alerts:      renderAlerts,
     email:       renderEmail,
     users:       renderUsers,
-    cameras:     renderCameras,
-    zones:       renderZones,
     storage:     renderStorage,
-    integration: renderIntegration,
-    backup:      renderBackup,
-    audit:       renderAudit,
   }
 
   const activeNav = navItems.find(n => n.id === activeSection)
@@ -818,7 +619,7 @@ export default function SettingsPage() {
         {/* ── CENTER: Section content ── */}
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
           {/* Save button */}
-          {['general','detection','alerts','email','storage','integration'].includes(activeSection) && (
+          {['general','detection','alerts','email','storage'].includes(activeSection) && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
               <button
                 onClick={saveAll}

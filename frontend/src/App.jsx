@@ -19,9 +19,6 @@ import LiveMonitoringPage from './components/pages/LiveMonitoringPage'
 import VideoUploadPage    from './components/pages/VideoUploadPage'
 import AlertsPage         from './components/pages/AlertsPage'
 import ReportsPage        from './components/pages/ReportsPage'         // Phase 9 ✅
-import SitesPage          from './components/pages/SitesPage'           // Phase 10 ✅
-import WorkersPage        from './components/pages/WorkersPage'         // Phase 10 ✅
-import SettingsPage       from './components/pages/SettingsPage'
 import AnalyticsPage      from './components/pages/AnalyticsPage'      // Phase 11 ✅
 
 const Placeholder = ({ title, phase }) => (
@@ -74,9 +71,6 @@ export default function App() {
                   <Route path="/video-upload"    element={<VideoUploadPage />} />
                   <Route path="/alerts"          element={<AlertsPage />} />
                   <Route path="/reports"         element={<ReportsPage />} />         {/* ✅ Phase 12 */}
-                  <Route path="/sites"           element={<SitesPage />} />           {/* ✅ Phase 10 */}
-                  <Route path="/workers"         element={<WorkersPage />} />         {/* ✅ Phase 10 */}
-                  <Route path="/settings"        element={<SettingsPage />} />
                   <Route path="/analytics"       element={<AnalyticsPage />} />           {/* ✅ Phase 11 */}
                 </Route>
 
