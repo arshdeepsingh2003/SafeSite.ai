@@ -19,10 +19,9 @@ from routes.alerts      import router as alerts_router
 from routes.socket_test import router as test_router
 from routes.email       import router as email_router
 from routes.llm         import router as llm_router
-from routes.sites       import router as sites_router
-from routes.workers     import router as workers_router
 from routes.dashboard   import router as dashboard_router
 from routes.analytics   import router as analytics_router   # ← Phase 11
+from routes.reports     import router as reports_router     # ← Phase 12
 from socket_server      import sio, emit_system_status
 import os
 
@@ -73,14 +72,9 @@ app.include_router(alerts_router)     # /alerts/...
 app.include_router(test_router)       # /test/...
 app.include_router(email_router)      # /email/...
 app.include_router(llm_router)        # /llm/...
-app.include_router(sites_router)      # /sites/...
-app.include_router(workers_router)    # /workers/...
 app.include_router(dashboard_router)  # /dashboard/...
-from routes.reports   import router as reports_router
-from routes.settings  import router as settings_router  # Phase 13
 app.include_router(analytics_router)  # /analytics/...  ← Phase 11
 app.include_router(reports_router)    # /reports/...  ← Phase 12
-app.include_router(settings_router)   # /settings/... ← Phase 13
 
 @app.get("/")
 def root():
@@ -89,7 +83,7 @@ def root():
         "version": "13.0.0",
         "docs":    "http://localhost:8000/docs",
         "routes":  ["/auth","/video","/ai","/alerts","/email","/llm",
-                    "/sites","/workers","/dashboard","/analytics"],
+                    "/dashboard","/analytics","/reports"],
     }
 
 @app.get("/health")
