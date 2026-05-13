@@ -169,7 +169,7 @@ function PreviousItem({ video, onDelete, onAnalyze, analyzing }) {
 export default function VideoUploadPage() {
   const {
     videos, loadingList, uploading, uploadProgress,
-    uploadFile, registerStream, deleteVideo,
+    uploadFile, deleteVideo, deleteAllVideos,
   } = useVideoUpload()
 
   const { startAnalysis, analysisStatus, analysisResults, fullAnalysisData } = useAnalysis()
@@ -177,11 +177,12 @@ export default function VideoUploadPage() {
   const [dragOver,     setDragOver]     = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl,   setPreviewUrl]   = useState(null)
-  const [streamUrl,    setStreamUrl]    = useState('')
   const [zone,         setZone]         = useState('Zone A')
-  const [cameraName,   setCameraName]   = useState('Camera 1')
   const [lastUploadId, setLastUploadId] = useState(null)
   const fileInputRef = useRef(null)
+  const changeFileInputRef = useRef(null)
+
+  const ZONE_OPTIONS = ['Zone A', 'Zone B', 'Zone C', 'Zone D']
 
   // ── Detection Output refs and state ──
   const outputVideoRef = useRef(null)
@@ -225,11 +226,6 @@ export default function VideoUploadPage() {
       // Automatically kick off AI analysis
       await startAnalysis(result.video_id)
     }
-  }
-
-  async function handleRegisterStream() {
-    const result = await registerStream(streamUrl, zone, cameraName)
-    if (result) setStreamUrl('')
   }
 
   const fileSizeMB = selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(1) : null
@@ -455,35 +451,28 @@ export default function VideoUploadPage() {
             )}
           </div>
 
-          {/* Live stream URL */}
+          {/* Zone selection */}
           <div style={{ marginBottom: '16px' }}>
             <label style={{ fontSize: '13px', fontWeight: '500', color: '#e6edf3', display: 'block', marginBottom: '7px' }}>
-              Live Stream URL <span style={{ color: '#8b949e', fontWeight: 400 }}>(Optional — .m3u8 / RTSP)</span>
+              Zone
             </label>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-              <input
-                value={streamUrl}
-                onChange={(e) => setStreamUrl(e.target.value)}
-                placeholder="https://example.com/stream.m3u8"
-                style={{
-                  flex: 1, padding: '9px 12px',
-                  background: 'var(--bg-primary)', border: '1px solid var(--border)',
-                  borderRadius: '7px', color: '#e6edf3', fontSize: '13px', outline: 'none',
-                }}
-              />
-              <button
-                onClick={handleRegisterStream}
-                style={{
-                  padding: '9px 14px', background: 'var(--bg-primary)',
-                  border: '1px solid var(--border)', borderRadius: '7px',
-                  color: '#8b949e', cursor: 'pointer', fontSize: '16px',
-                }}
-              >🔗</button>
-            </div>
-            
+            <select
+              value={zone}
+              onChange={(e) => setZone(e.target.value)}
+              style={{
+                width: '100%', padding: '9px 12px',
+                background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                borderRadius: '7px', color: '#e6edf3', fontSize: '13px', outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {ZONE_OPTIONS.map(z => (
+                <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
           </div>
 
-        
+
 
           {/* Upload progress */}
           {uploading && (
@@ -592,17 +581,34 @@ export default function VideoUploadPage() {
                   <div style={{ fontSize: '11px', color: '#8b949e' }}>{fileSizeMB} MB</div>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedFile(null)
-                  if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }
-                }}
-                style={{
-                  background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-                  borderRadius: '6px', padding: '5px 10px',
-                  color: '#ef4444', fontSize: '12px', cursor: 'pointer',
-                }}
-              >🗑 Remove</button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={() => changeFileInputRef.current?.click()}
+                  style={{
+                    background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)',
+                    borderRadius: '6px', padding: '5px 10px',
+                    color: '#818cf8', fontSize: '12px', cursor: 'pointer',
+                  }}
+                >🔄 Change</button>
+                <button
+                  onClick={() => {
+                    setSelectedFile(null)
+                    if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }
+                  }}
+                  style={{
+                    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+                    borderRadius: '6px', padding: '5px 10px',
+                    color: '#ef4444', fontSize: '12px', cursor: 'pointer',
+                  }}
+                >🗑 Remove</button>
+              </div>
+              <input
+                ref={changeFileInputRef}
+                type="file"
+                accept=".mp4,.mov,.avi,.mkv"
+                style={{ display: 'none' }}
+                onChange={(e) => e.target.files[0] && validateAndSetFile(e.target.files[0])}
+              />
             </div>
           )}
 
@@ -635,7 +641,21 @@ export default function VideoUploadPage() {
         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#e6edf3' }}>Previous Analyses</h2>
-            <span style={{ fontSize: '11px', color: '#8b949e' }}>{videos.length} total</span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', color: '#8b949e' }}>{videos.length} total</span>
+              {videos.length > 0 && (
+                <button
+                  onClick={deleteAllVideos}
+                  style={{
+                    padding: '3px 10px',
+                    background: 'rgba(239,68,68,0.12)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    borderRadius: '6px', color: '#ef4444',
+                    fontSize: '11px', cursor: 'pointer', fontWeight: '600',
+                  }}
+                >🗑 Delete All</button>
+              )}
+            </div>
           </div>
 
           {loadingList ? (

@@ -102,6 +102,18 @@ export function useVideoUpload() {
     }
   }, [fetchVideos])
 
+  // ── Delete all videos ──
+  const deleteAllVideos = useCallback(async () => {
+    if (!window.confirm('Delete ALL videos and analyses? This cannot be undone.')) return
+    try {
+      await api.delete('/video/delete-all')
+      toast.success('All videos deleted')
+      await fetchVideos()
+    } catch (err) {
+      toast.error('Could not delete all videos')
+    }
+  }, [fetchVideos])
+
   return {
     videos,
     loadingList,
@@ -110,6 +122,7 @@ export function useVideoUpload() {
     uploadFile,
     registerStream,
     deleteVideo,
+    deleteAllVideos,
     refreshVideos: fetchVideos,
   }
 }

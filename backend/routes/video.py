@@ -188,6 +188,33 @@ async def get_video(video_id: str, current_user: dict = Depends(get_current_user
 
 
 # -------------------------------------------------------
+# DELETE /video/delete-all  (must be before /{video_id})
+# -------------------------------------------------------
+@router.delete("/delete-all")
+async def delete_all_videos(current_user: dict = Depends(get_current_user)):
+    """Delete ALL videos, their files, and associated alerts."""
+    # Delete all video files from disk
+    videos = db["videos"].find()
+    deleted_count = 0
+    async for video in videos:
+        file_path = video.get("file_path")
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+        deleted_count += 1
+
+    # Remove all video records
+    await db["videos"].delete_many({})
+
+    # Also remove associated alerts
+    await db["alerts"].delete_many({})
+
+    return {
+        "message": f"✅ Deleted {deleted_count} videos and all associated alerts",
+        "deleted_count": deleted_count
+    }
+
+
+# -------------------------------------------------------
 # DELETE /video/{video_id}
 # -------------------------------------------------------
 @router.delete("/{video_id}")
