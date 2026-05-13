@@ -8,7 +8,6 @@ const PAGE_TITLES = {
   '/live-monitoring': 'Live Monitoring',
   '/video-upload':    'Video Upload & Analysis',
   '/alerts':          'Alerts',
-  '/analytics':       'Analytics',
   '/reports':         'Reports',
   '/sites':           'Sites',
   '/workers':         'Workers',

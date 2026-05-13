@@ -14,11 +14,10 @@ export default function Sidebar() {
   const navigate           = useNavigate()
 
   const navItems = [
-    { path: '/dashboard',       icon: '📊', label: 'Dashboard'       },
     { path: '/live-monitoring', icon: '📹', label: 'Live Monitoring'  },
     { path: '/video-upload',    icon: '🎬', label: 'Video Upload'     },
+    { path: '/dashboard',       icon: '📊', label: 'Dashboard'       },
     { path: '/alerts',          icon: '🚨', label: 'Alerts', badge: unreadCount },
-    { path: '/analytics',       icon: '📈', label: 'Analytics'        },
     { path: '/reports',         icon: '📄', label: 'Reports'          },
   ]
 

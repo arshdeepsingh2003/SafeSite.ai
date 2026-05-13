@@ -15,12 +15,11 @@ import AppLayout          from './components/layout/AppLayout'
 
 // ── Pages ────────────────────────────────────────────────────
 import LoginPage          from './components/pages/LoginPage'
-import DashboardPage      from './components/pages/DashboardPage'      // Phase 10 ✅
+import DashboardPage      from './components/pages/DashboardPage'
 import LiveMonitoringPage from './components/pages/LiveMonitoringPage'
 import VideoUploadPage    from './components/pages/VideoUploadPage'
 import AlertsPage         from './components/pages/AlertsPage'
 import ReportsPage        from './components/pages/ReportsPage'         // Phase 9 ✅
-import AnalyticsPage      from './components/pages/AnalyticsPage'      // Phase 11 ✅
 
 const Placeholder = ({ title, phase }) => (
   <div style={{ padding: '20px' }}>
@@ -68,12 +67,11 @@ export default function App() {
 
                 {/* Protected */}
                 <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                  <Route path="/dashboard"       element={<DashboardPage />} />      {/* ✅ Phase 10 */}
+                  <Route path="/dashboard"       element={<DashboardPage />} />
                   <Route path="/live-monitoring" element={<LiveMonitoringPage />} />
                   <Route path="/video-upload"    element={<VideoUploadPage />} />
                   <Route path="/alerts"          element={<AlertsPage />} />
                   <Route path="/reports"         element={<ReportsPage />} />         {/* ✅ Phase 12 */}
-                  <Route path="/analytics"       element={<AnalyticsPage />} />           {/* ✅ Phase 11 */}
                 </Route>
 
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
