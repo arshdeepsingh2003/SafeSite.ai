@@ -205,15 +205,14 @@ export default function AnalyticsPage() {
       setInsightLoad(true)
       try {
         const result = await analyzeDetections({
-          total_workers:      summary.total_workers,
-          compliant_workers:  summary.compliant,
-          no_helmet_count:    summary.no_helmet,
-          no_vest_count:      summary.no_vest,
-          both_missing_count: summary.no_helmet_and_no_vest,
-          compliance_rate:    summary.compliance_rate,
-          zones_affected:     byZone.zones.slice(0,3).map(z => z.zone),
-          top_violation_zone: byZone.zones[0]?.zone || 'Zone A',
-          frame_count:        summary.total_violations * 5,
+          zone:                  byZone.zones[0]?.zone || 'Zone A',
+          total_workers:         summary.total_workers,
+          compliant:             summary.compliant,
+          no_helmet:             summary.no_helmet,
+          no_vest:               summary.no_vest,
+          no_helmet_and_no_vest: summary.no_helmet_and_no_vest,
+          compliance_rate:       summary.compliance_rate,
+          frames_analyzed:       summary.total_violations * 5,
         })
         setInsight(result)
       } catch { /* silently ignore */ }

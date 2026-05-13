@@ -170,6 +170,7 @@ async def generate_report(
 
     # ── Call Groq LLM ──
     llm_summary = ""
+    llm_data = None
     try:
         alerts_data = {
             "date": now.strftime("%Y-%m-%d"),
@@ -182,7 +183,12 @@ async def generate_report(
             "peak_hour": "N/A",
             "zones": {z["zone"]: z["count"] for z in top_zones},
         }
-        llm_summary = await generate_daily_report(alerts_data)
+        llm_result = await generate_daily_report(alerts_data)
+        if isinstance(llm_result, dict):
+            llm_summary = llm_result.get("executive_summary", str(llm_result))
+            llm_data   = llm_result
+        else:
+            llm_summary = str(llm_result)
     except Exception as e:
         llm_summary = f"AI summary unavailable: {e}"
 
@@ -230,6 +236,7 @@ async def generate_report(
         "stats":        stats,
         "top_zones":    top_zones,
         "llm_summary":  llm_summary,
+        "llm_data":     llm_data,
         "full_text":    full_text,
     }
     result = await db["reports"].insert_one(report_doc)

@@ -132,21 +132,27 @@ function ReportPreview({ report, onDownload }) {
         </div>
 
         {/* AI Summary excerpt */}
-        {report.llm_summary && (
-          <div style={{
-            padding: '10px 12px',
-            background: 'rgba(99,102,241,0.07)',
-            border: '1px solid rgba(99,102,241,0.2)',
-            borderRadius: '8px', marginBottom: '14px',
-          }}>
-            <div style={{ fontSize: '10px', fontWeight: '700', color: '#818cf8', marginBottom: '5px' }}>
-              🤖 AI EXECUTIVE SUMMARY
+        {(() => {
+          const text = typeof report.llm_summary === 'string'
+            ? report.llm_summary
+            : report.llm_summary?.executive_summary || ''
+          if (!text) return null
+          return (
+            <div style={{
+              padding: '10px 12px',
+              background: 'rgba(99,102,241,0.07)',
+              border: '1px solid rgba(99,102,241,0.2)',
+              borderRadius: '8px', marginBottom: '14px',
+            }}>
+              <div style={{ fontSize: '10px', fontWeight: '700', color: '#818cf8', marginBottom: '5px' }}>
+                🤖 AI EXECUTIVE SUMMARY
+              </div>
+              <div style={{ fontSize: '11px', color: '#8b949e', lineHeight: 1.6 }}>
+                {text.slice(0, 280)}{text.length > 280 ? '…' : ''}
+              </div>
             </div>
-            <div style={{ fontSize: '11px', color: '#8b949e', lineHeight: 1.6 }}>
-              {report.llm_summary.slice(0, 280)}{report.llm_summary.length > 280 ? '…' : ''}
-            </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Top zones */}
         {report.top_zones?.length > 0 && (
@@ -225,15 +231,14 @@ export default function ReportsPage() {
       setInsightLoad(true)
       try {
         const res = await analyzeDetections({
-          total_workers:      summary.workers_detected,
-          compliant_workers:  Math.round(summary.workers_detected * (summary.compliance_rate / 100)),
-          no_helmet_count:    Math.round(summary.total_violations * 0.45),
-          no_vest_count:      Math.round(summary.total_violations * 0.35),
-          both_missing_count: summary.high_risk_alerts,
-          compliance_rate:    summary.compliance_rate,
-          zones_affected:     ['Zone A', 'Zone B', 'Zone C'],
-          top_violation_zone: 'Zone A',
-          frame_count:        summary.total_violations * 5,
+          zone:                  'Zone A',
+          total_workers:         summary.workers_detected,
+          compliant:             Math.round(summary.workers_detected * (summary.compliance_rate / 100)),
+          no_helmet:             Math.round(summary.total_violations * 0.45),
+          no_vest:               Math.round(summary.total_violations * 0.35),
+          no_helmet_and_no_vest: summary.high_risk_alerts,
+          compliance_rate:       summary.compliance_rate,
+          frames_analyzed:       summary.total_violations * 5,
         })
         // Turn recommendations into bullet points
         if (res?.recommendations?.length) {
@@ -255,10 +260,13 @@ export default function ReportsPage() {
     setSelected(full)
   }
 
-  // Generate + auto-select the new report
+  // Generate + auto-select + download the new report
   async function handleGenerate() {
     const report = await generateReport({ type: genType, zone, site })
-    if (report) setSelected(report)
+    if (report) {
+      setSelected(report)
+      await downloadReport(report.id, report.name)
+    }
   }
 
   const s   = summary
@@ -569,11 +577,6 @@ export default function ReportsPage() {
                 </div>
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); handleSelectReport(r) }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '15px' }}
-                    title="Preview"
-                  >👁</button>
                   <button
                     onClick={e => { e.stopPropagation(); downloadReport(r.id, r.name) }}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '15px' }}
