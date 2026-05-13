@@ -210,6 +210,24 @@ async def _run_detection_subprocess(file_path: str, video_id: str, zone: str):
         )
 
 
+# ── POST /ai/progress/{video_id} ────────────────────────────
+# Called by detect.py to report progress during processing
+@router.post("/progress/{video_id}")
+async def receive_progress(video_id: str, progress_data: dict):
+    try:
+        oid = ObjectId(video_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid video ID")
+
+    await db["videos"].update_one(
+        {"_id": oid},
+        {"$set": {
+            "analysis_progress": progress_data,
+        }}
+    )
+    return {"status": "ok"}
+
+
 # ── GET /ai/status/{video_id} ────────────────────────────────
 # Frontend polls this to check if analysis is complete
 @router.get("/status/{video_id}")
@@ -232,6 +250,7 @@ async def get_analysis_status(video_id: str):
         "status":      video.get("status", "uploaded"),
         "zone":        video.get("zone"),
         "uploaded_at": str(video.get("uploaded_at", "")),
+        "analysis_progress": video.get("analysis_progress"),
     }
 
     # Include annotated video URL if available

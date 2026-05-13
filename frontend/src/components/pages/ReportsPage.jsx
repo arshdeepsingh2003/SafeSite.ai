@@ -216,7 +216,7 @@ export default function ReportsPage() {
 
   // Analytics for trend chart + donut
   const { trend, loading: analyticsLoading } = useAnalytics({
-    range: 'week', granularity: trendGran,
+    range: 'week', zone, granularity: trendGran,
   })
 
   // Groq for AI insights

@@ -172,7 +172,7 @@ export default function VideoUploadPage() {
     uploadFile, deleteVideo, deleteAllVideos,
   } = useVideoUpload()
 
-  const { startAnalysis, analysisStatus, analysisResults, fullAnalysisData } = useAnalysis()
+  const { startAnalysis, analysisStatus, analysisResults, fullAnalysisData, analysisProgress } = useAnalysis()
 
   const [dragOver,     setDragOver]     = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -239,9 +239,6 @@ export default function VideoUploadPage() {
   const lastVideo = lastUploadId ? videos.find(v => v.id === lastUploadId) : null
   const originalVideoUrl = lastVideo?.stored_name
     ? makeFullUrl(`/uploads/videos/${lastVideo.stored_name}`)
-    : null
-  const annotatedVideoUrl = lastFullData?.annotated_video_url
-    ? makeFullUrl(lastFullData.annotated_video_url)
     : null
   const frameDetections = lastFullData?.frame_detections || []
   const hasFrameDetections = frameDetections.length > 0
@@ -494,14 +491,57 @@ export default function VideoUploadPage() {
           {/* AI analysis progress banner */}
           {lastStatus === 'processing' && (
             <div style={{
-              marginBottom: '14px', padding: '12px',
+              marginBottom: '14px', padding: '14px',
               background: 'rgba(99,102,241,0.1)',
               border: '1px solid rgba(99,102,241,0.3)',
               borderRadius: '8px', fontSize: '13px', color: '#818cf8',
-              display: 'flex', alignItems: 'center', gap: '8px',
             }}>
-              <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
-              <span>AI is analyzing your video… This may take a few minutes.</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+                <span style={{ fontWeight: '600' }}>Analyzing Video...</span>
+              </div>
+
+              {/* Progress bar */}
+              {analysisProgress[lastUploadId] && (
+                <>
+                  <div style={{
+                    height: '6px', background: 'rgba(99,102,241,0.2)',
+                    borderRadius: '3px', overflow: 'hidden', marginBottom: '8px',
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.min(analysisProgress[lastUploadId].progress || 0, 100)}%`,
+                      background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                      borderRadius: '3px',
+                      transition: 'width 0.5s ease',
+                    }} />
+                  </div>
+
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    fontSize: '11px', color: '#8b949e',
+                  }}>
+                    <span>{analysisProgress[lastUploadId].progress?.toFixed(0) || 0}%</span>
+                    {analysisProgress[lastUploadId].inference_fps > 0 && (
+                      <span>
+                        {analysisProgress[lastUploadId].inference_fps?.toFixed(1) || '?'} FPS
+                      </span>
+                    )}
+                    {analysisProgress[lastUploadId].fps > 0 && (
+                      <span>{analysisProgress[lastUploadId].processed_frames} / {analysisProgress[lastUploadId].total_frames} frames</span>
+                    )}
+                    {analysisProgress[lastUploadId].elapsed_sec > 30 && (
+                      <span>~{analysisProgress[lastUploadId].elapsed_sec?.toFixed(0) || '?'}s elapsed</span>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {!analysisProgress[lastUploadId] && (
+                <div style={{ fontSize: '11px', color: '#8b949e' }}>
+                  Starting analysis... This may take 1-2 minutes for CPU processing.
+                </div>
+              )}
             </div>
           )}
 
@@ -524,7 +564,7 @@ export default function VideoUploadPage() {
             {uploading
               ? `⏳ Uploading… ${uploadProgress}%`
               : lastStatus === 'processing'
-              ? '🤖 AI Analyzing…'
+              ? `🤖 Analyzing ${analysisProgress[lastUploadId]?.progress?.toFixed(0) || '…'}%`
               : '▶  Upload & Start Analysis'}
           </button>
 
@@ -730,11 +770,11 @@ export default function VideoUploadPage() {
                      Live Canvas Overlay Active
                    </span>
                  )}
-                 {frameDetections.length > 0 && (
-                   <span style={{ fontSize: '11px', color: '#8b949e' }}>
-                     {frameDetections.length} sampled frames analyzed
-                   </span>
-                 )}
+                  {frameDetections.length > 0 && (
+                    <span style={{ fontSize: '11px', color: '#8b949e' }}>
+                      {frameDetections.length} frames • {(lastFullData?.processing_fps || 0).toFixed(1)} FPS
+                    </span>
+                  )}
                </div>
              </div>
 
@@ -808,25 +848,31 @@ export default function VideoUploadPage() {
                    )}
                  </div>
 
-                 {/* Video info */}
-                 {lastFullData?.video_info && (
-                   <div style={{
-                     marginTop: '12px',
-                     padding: '10px 14px',
-                     background: 'var(--bg-primary)',
-                     borderRadius: '8px',
-                     display: 'flex',
-                     gap: '20px',
-                     flexWrap: 'wrap',
-                     fontSize: '12px',
-                     color: '#8b949e',
-                   }}>
-                     <span>📐 {lastFullData.video_info.width} × {lastFullData.video_info.height}</span>
-                     <span>🎞️ {lastFullData.video_info.fps?.toFixed(1) || 30} FPS</span>
-                     <span>⏱️ {lastFullData.video_info.duration_sec?.toFixed(1) || 0}s</span>
-                     <span>⚙️ Processed in {lastFullData.processing_time_sec?.toFixed(1) || 0}s</span>
-                   </div>
-                 )}
+                  {/* Video info */}
+                  {lastFullData?.video_info && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px 14px',
+                      background: 'var(--bg-primary)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      gap: '16px',
+                      flexWrap: 'wrap',
+                      fontSize: '12px',
+                      color: '#8b949e',
+                    }}>
+                      <span>📐 {lastFullData.video_info.width} × {lastFullData.video_info.height}</span>
+                      <span>🎞️ {lastFullData.video_info.fps?.toFixed(1) || 30} FPS</span>
+                      <span>⏱️ {lastFullData.video_info.duration_sec?.toFixed(1) || 0}s</span>
+                      <span>⚙️ {lastFullData.processing_time_sec?.toFixed(1) || 0}s</span>
+                      {lastFullData.avg_inference_time_ms > 0 && (
+                        <span>⚡ {lastFullData.avg_inference_time_ms?.toFixed(0) || '?'}ms/infer</span>
+                      )}
+                      {lastFullData.processing_fps > 0 && (
+                        <span>🚀 {lastFullData.processing_fps?.toFixed(1) || '?'} proc FPS</span>
+                      )}
+                    </div>
+                  )}
                </div>
 
                {/* ── RIGHT: Live Detections Panel ── */}

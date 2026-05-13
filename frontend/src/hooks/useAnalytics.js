@@ -14,10 +14,10 @@ import { useState, useEffect, useCallback } from 'react'
 import api from '../services/api'
 
 export function useAnalytics({
-  range       = '7d',     // '1d' | '7d' | '30d' | '90d'
+  range       = 'week',
   zone        = 'all',
-  granularity = 'daily',  // 'hourly' | 'daily' | 'weekly'
-  autoRefreshMs = 0,      // 0 = disabled
+  granularity = 'daily',
+  autoRefreshMs = 0,
 } = {}) {
   const [summary,         setSummary]         = useState(null)
   const [trend,           setTrend]           = useState([])
@@ -32,30 +32,36 @@ export function useAnalytics({
   const fetchAll = useCallback(async () => {
     setLoading(true)
     setError(null)
-    try {
-      const [sumRes, trendRes, zoneRes, heatRes, compRes, zsRes, detRes] = await Promise.all([
-        api.get(`/analytics/summary?range=${range}&zone=${zone}`),
-        api.get(`/analytics/trend?range=${range}&granularity=${granularity}&zone=${zone}`),
-        api.get(`/analytics/by-zone?range=${range}`),
-        api.get(`/analytics/by-time-of-day?range=${range}`),
-        api.get(`/analytics/compliance-trend?weeks=4`),
-        api.get(`/analytics/zone-summary?range=${range}`),
-        api.get(`/analytics/detection-summary?range=${range}`),
-      ])
 
-      setSummary(sumRes.data)
-      setTrend(trendRes.data.data        || [])
-      setZoneData(zoneRes.data.zones     || [])
-      setHeatmap(heatRes.data)
-      setComplianceTrend(compRes.data.weeks || [])
-      setZoneSummary(zsRes.data.rows     || [])
-      setDetectionStats(detRes.data)
-    } catch (err) {
-      console.error('Analytics fetch error:', err)
-      setError('Could not load analytics data. Make sure the backend is running.')
-    } finally {
-      setLoading(false)
+    const results = await Promise.allSettled([
+      api.get(`/analytics/summary?range=${range}&zone=${zone}`),
+      api.get(`/analytics/trend?range=${range}&granularity=${granularity}&zone=${zone}`),
+      api.get(`/analytics/by-zone?range=${range}&zone=${zone}`),
+      api.get(`/analytics/by-time-of-day?range=${range}&zone=${zone}`),
+      api.get(`/analytics/compliance-trend?range=${range}&zone=${zone}`),
+      api.get(`/analytics/zone-summary?range=${range}&zone=${zone}`),
+      api.get(`/analytics/detection-summary?range=${range}&zone=${zone}`),
+    ])
+
+    const [sumRes, trendRes, zoneRes, heatRes, compRes, zsRes, detRes] = results
+
+    const errors = results.filter(r => r.status === 'rejected')
+    if (errors.length > 0) {
+      console.error('Analytics fetch errors:', errors.map(e => e.reason))
+      if (errors.length === results.length) {
+        setError('Could not load analytics data. Make sure the backend is running.')
+      }
     }
+
+    if (sumRes.status === 'fulfilled')  setSummary(sumRes.value.data)
+    if (trendRes.status === 'fulfilled') setTrend(trendRes.value.data.data || [])
+    if (zoneRes.status === 'fulfilled')  setZoneData(zoneRes.value.data.zones || [])
+    if (heatRes.status === 'fulfilled')  setHeatmap(heatRes.value.data)
+    if (compRes.status === 'fulfilled')  setComplianceTrend(compRes.value.data.weeks || [])
+    if (zsRes.status === 'fulfilled')    setZoneSummary(zsRes.value.data.rows || [])
+    if (detRes.status === 'fulfilled')   setDetectionStats(detRes.value.data)
+
+    setLoading(false)
   }, [range, zone, granularity])
 
   // Load on mount and whenever filters change

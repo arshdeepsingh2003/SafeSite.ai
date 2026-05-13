@@ -3,7 +3,7 @@
 // File: frontend/src/components/ui/LiveAIInsight.jsx
 //
 // A self-contained widget that:
-//   1. Fetches today's alert summary from /alerts/summary
+//   1. Fetches analytics summary with current filters from /analytics/summary
 //   2. Sends it to Groq via /llm/analyze
 //   3. Renders the insight using <AIInsightPanel>
 //
@@ -13,6 +13,8 @@
 //   compact      — boolean, smaller card layout
 //   autoLoad     — boolean, fetch on mount (default true)
 //   refreshEvery — seconds between auto-refresh (0 = off)
+//   range        — analytics range filter (today/week/month/3months)
+//   zone         — zone filter (all/Zone A/Zone B/etc)
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
@@ -24,6 +26,8 @@ export default function LiveAIInsight({
   compact      = false,
   autoLoad     = true,
   refreshEvery = 0,
+  range        = 'week',
+  zone         = 'all',
 }) {
   const { analyzeDetections, isConfigured, loadingStatus } = useLLM()
   const [insight, setInsight]   = useState(null)
@@ -33,27 +37,23 @@ export default function LiveAIInsight({
   const fetchInsight = useCallback(async () => {
     setLoading(true)
     try {
-      // 1. Get today's summary counts
-      const summaryRes = await api.get('/alerts/summary')
+      // 1. Get analytics summary with filters
+      const summaryRes = await api.get(`/analytics/summary?range=${range}&zone=${zone}`)
       const s = summaryRes.data
 
       // 2. Build the payload for Groq
-      const compliantCount = Math.max(0, (s.total ?? 0) - (s.no_helmet ?? 0) - (s.no_vest ?? 0) - (s.no_helmet_and_no_vest ?? 0))
-      const compRate = s.total > 0
-        ? Math.round((compliantCount / s.total) * 100)
-        : 100
-      const zones = s.zones_affected?.length ? s.zones_affected : ['Zone A']
-      const topZone = s.top_violation_zone || zones[0]
+      const totalViolations = s.total_violations ?? 0
+      const insightZone = zone !== 'all' ? zone : 'All Zones (Site-wide)'
 
       const payload = {
-        zone:                  topZone,
-        total_workers:         s.total ?? 0,
-        compliant:             compliantCount,
+        zone:                  insightZone,
+        total_workers:         s.total_workers ?? 0,
+        compliant:             s.compliant ?? 0,
         no_helmet:             s.no_helmet ?? 0,
         no_vest:               s.no_vest ?? 0,
         no_helmet_and_no_vest: s.no_helmet_and_no_vest ?? 0,
-        compliance_rate:       compRate,
-        frames_analyzed:       s.total * 10 || 100,
+        compliance_rate:       s.compliance_rate ?? 0,
+        frames_analyzed:       totalViolations * 10 || 100,
       }
 
       // 3. Ask Groq for insight
@@ -65,9 +65,9 @@ export default function LiveAIInsight({
     } finally {
       setLoading(false)
     }
-  }, [analyzeDetections])
+  }, [analyzeDetections, range, zone])
 
-  // Auto-load on mount
+  // Auto-load on mount and when filters change
   useEffect(() => {
     if (autoLoad && !loadingStatus) fetchInsight()
   }, [autoLoad, loadingStatus, fetchInsight])

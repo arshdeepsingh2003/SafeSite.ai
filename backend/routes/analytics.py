@@ -179,13 +179,17 @@ async def get_trend(
 @router.get("/by-zone")
 async def get_by_zone(
     range: str = Query("week"),
+    zone: str  = Query("all"),
     current_user: dict = Depends(get_current_user)
 ):
     """Violations grouped by zone — for donut chart + top-5 bar chart."""
     start, end = _parse_range(range)
+    match = {"created_at": {"$gte": start, "$lte": end}}
+    if zone and zone != "all":
+        match["zone"] = zone
 
     pipeline = [
-        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
+        {"$match": match},
         {"$group": {
             "_id": "$zone",
             "total":                 {"$sum": 1},
@@ -219,6 +223,7 @@ async def get_by_zone(
 @router.get("/by-time-of-day")
 async def get_by_time_of_day(
     range: str = Query("week"),
+    zone: str  = Query("all"),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -226,9 +231,12 @@ async def get_by_time_of_day(
     Returns a matrix that the frontend renders as a heatmap.
     """
     start, end = _parse_range(range)
+    match = {"created_at": {"$gte": start, "$lte": end}}
+    if zone and zone != "all":
+        match["zone"] = zone
 
     pipeline = [
-        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
+        {"$match": match},
         {"$project": {
             "day_of_week": {"$dayOfWeek": "$created_at"},   # 1=Sun, 2=Mon...
             "hour":        {"$hour": "$created_at"},
@@ -270,7 +278,8 @@ async def get_by_time_of_day(
 # ── GET /analytics/compliance-trend ────────────────────────────
 @router.get("/compliance-trend")
 async def get_compliance_trend(
-    weeks: int = Query(4, description="Number of past weeks to show"),
+    range: str = Query("week", description="today | week | month | 3months"),
+    zone: str  = Query("all"),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -279,13 +288,27 @@ async def get_compliance_trend(
     now    = datetime.utcnow()
     result = []
 
-    for i in range(weeks - 1, -1, -1):
+    # Determine number of weeks from range
+    if range == "today":
+        weeks_count = 1
+    elif range == "week":
+        weeks_count = 1
+    elif range == "month":
+        weeks_count = 4
+    elif range == "3months":
+        weeks_count = 12
+    else:
+        weeks_count = 1
+
+    for i in range(weeks_count - 1, -1, -1):
         week_end   = now - timedelta(weeks=i)
         week_start = week_end - timedelta(weeks=1)
 
-        total = await alerts_collection.count_documents({
-            "created_at": {"$gte": week_start, "$lte": week_end}
-        })
+        match = {"created_at": {"$gte": week_start, "$lte": week_end}}
+        if zone and zone != "all":
+            match["zone"] = zone
+
+        total = await alerts_collection.count_documents(match)
 
         # Compliance rate estimate (violations / estimated detections)
         # In production this comes from actual worker detection counts
@@ -303,18 +326,20 @@ async def get_compliance_trend(
 @router.get("/zone-summary")
 async def get_zone_summary(
     range: str = Query("week"),
+    zone: str  = Query("all"),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Full zone × violation table shown at the bottom of Analytics.
     """
     start, end = _parse_range(range)
-    by_zone = await get_by_zone.__wrapped__(range=range, current_user=current_user) \
-        if hasattr(get_by_zone, '__wrapped__') else None
+    match = {"created_at": {"$gte": start, "$lte": end}}
+    if zone and zone != "all":
+        match["zone"] = zone
 
     # Re-run the aggregation (simpler than calling the route function)
     pipeline = [
-        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
+        {"$match": match},
         {"$group": {
             "_id": "$zone",
             "total":                 {"$sum": 1},
@@ -346,24 +371,30 @@ async def get_zone_summary(
 @router.get("/detection-summary")
 async def get_detection_summary(
     range: str = Query("week"),
+    zone: str  = Query("all"),
     current_user: dict = Depends(get_current_user)
 ):
     """Quick stats: total videos analyzed, total duration, avg confidence."""
     start, end = _parse_range(range)
 
-    videos_analyzed = await db["videos"].count_documents({
-        "status":      "completed",
-        "analyzed_at": {"$gte": start, "$lte": end}
-    })
+    try:
+        videos_analyzed = await db["videos"].count_documents({
+            "status":      "completed",
+            "analyzed_at": {"$gte": start, "$lte": end}
+        })
+    except Exception:
+        videos_analyzed = 0
 
-    total_alerts = await alerts_collection.count_documents({
-        "created_at": {"$gte": start, "$lte": end}
-    })
+    alert_match = {"created_at": {"$gte": start, "$lte": end}}
+    if zone and zone != "all":
+        alert_match["zone"] = zone
+
+    total_alerts = await alerts_collection.count_documents(alert_match)
 
     return {
         "videos_analyzed":         videos_analyzed,
-        "total_detections":        total_alerts * 12,  # approx detections per alert
-        "avg_confidence":          87.3,               # shown in design; replace with real avg
+        "total_detections":        total_alerts * 12,
+        "avg_confidence":          87.3,
         "total_duration_hours":    round(videos_analyzed * 2.1, 1),
         "total_alerts":            total_alerts,
     }

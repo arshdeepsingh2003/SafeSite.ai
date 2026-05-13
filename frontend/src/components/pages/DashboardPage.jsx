@@ -3,7 +3,7 @@
 // File: frontend/src/components/pages/DashboardPage.jsx
 // ============================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -299,6 +299,7 @@ export default function DashboardPage() {
   const [range,         setRange]         = useState('week')
   const [zone,          setZone]          = useState('all')
   const [trendGran,     setTrendGran]     = useState('daily')
+  const trendGranRef = useRef('daily')
   const [summary,       setSummary]       = useState(null)
   const [trend,         setTrend]         = useState([])
   const [byZone,        setByZone]        = useState({ zones:[], grand_total:0 })
@@ -337,32 +338,40 @@ export default function DashboardPage() {
   // ── Fetch all analytics data ─────────────────────────────
   const fetchAll = useCallback(async () => {
     setAnalyticsLoading(true)
-    try {
-      const [sRes, tRes, zRes, hRes, cRes, zsRes, dRes] = await Promise.all([
-        api.get(`/analytics/summary?range=${range}&zone=${zone}`),
-        api.get(`/analytics/trend?range=${range}&granularity=${trendGran}&zone=${zone}`),
-        api.get(`/analytics/by-zone?range=${range}`),
-        api.get(`/analytics/by-time-of-day?range=${range}`),
-        api.get(`/analytics/compliance-trend?weeks=4`),
-        api.get(`/analytics/zone-summary?range=${range}`),
-        api.get(`/analytics/detection-summary?range=${range}`),
-      ])
-      setSummary(sRes.data)
-      setTrend(tRes.data.data || [])
-      setByZone(zRes.data)
-      setHeatmap(hRes.data)
-      setCompTrend(cRes.data.weeks || [])
-      setZoneSummary(zsRes.data.rows || [])
-      setDetectionSum(dRes.data)
-    } catch (err) {
-      console.error('Analytics fetch error:', err)
-      toast.error('Could not load analytics data')
-    } finally {
-      setAnalyticsLoading(false)
-    }
-  }, [range, zone, trendGran])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+    const results = await Promise.allSettled([
+      api.get(`/analytics/summary?range=${range}&zone=${zone}`),
+      api.get(`/analytics/trend?range=${range}&granularity=${trendGranRef.current}&zone=${zone}`),
+      api.get(`/analytics/by-zone?range=${range}&zone=${zone}`),
+      api.get(`/analytics/by-time-of-day?range=${range}&zone=${zone}`),
+      api.get(`/analytics/compliance-trend?range=${range}&zone=${zone}`),
+      api.get(`/analytics/zone-summary?range=${range}&zone=${zone}`),
+      api.get(`/analytics/detection-summary?range=${range}&zone=${zone}`),
+    ])
+
+    const [sRes, tRes, zRes, hRes, cRes, zsRes, dRes] = results
+
+    const errors = results.filter(r => r.status === 'rejected')
+    if (errors.length > 0) {
+      console.error('Analytics fetch errors:', errors.map(e => e.reason))
+      if (errors.length === results.length) {
+        toast.error('Could not load analytics data')
+      }
+    }
+
+    if (sRes.status === 'fulfilled') setSummary(sRes.value.data)
+    if (tRes.status === 'fulfilled') setTrend(tRes.value.data.data || [])
+    if (zRes.status === 'fulfilled') setByZone(zRes.value.data)
+    if (hRes.status === 'fulfilled') setHeatmap(hRes.value.data)
+    if (cRes.status === 'fulfilled') setCompTrend(cRes.value.data.weeks || [])
+    if (zsRes.status === 'fulfilled') setZoneSummary(zsRes.value.data.rows || [])
+    if (dRes.status === 'fulfilled') setDetectionSum(dRes.value.data)
+
+    setAnalyticsLoading(false)
+  }, [range, zone])
+
+  // Initial fetch on mount only — Apply Filters button & granularity toggles trigger manually
+  useEffect(() => { fetchAll() }, [])
 
   // ── Generate AI insight when summary loads ───────────────
   useEffect(() => {
@@ -416,7 +425,7 @@ export default function DashboardPage() {
   }
 
   // ── Derived values (merge both data sources) ─────────────
-  const sDash      = stats?.stat_cards
+  const sDash      = stats?.stats
   const total      = summary?.total_workers ?? sDash?.total_workers ?? 0
   const compliant  = summary?.compliant ?? sDash?.compliant ?? 0
   const noHelmet   = summary?.no_helmet ?? sDash?.no_helmet ?? 0
@@ -615,8 +624,8 @@ export default function DashboardPage() {
           title="Violation Trend Over Time"
           topRight={
             <div style={{ display:'flex', gap:'4px' }}>
-              <RangeBtn active={trendGran==='hourly'} label="Hourly" onClick={() => setTrendGran('hourly')} />
-              <RangeBtn active={trendGran==='daily'}  label="Daily"  onClick={() => setTrendGran('daily')}  />
+              <RangeBtn active={trendGran==='hourly'} label="Hourly" onClick={() => { trendGranRef.current = 'hourly'; setTrendGran('hourly'); fetchAll() }} />
+              <RangeBtn active={trendGran==='daily'}  label="Daily"  onClick={() => { trendGranRef.current = 'daily'; setTrendGran('daily'); fetchAll() }} />
             </div>
           }
         >
@@ -742,7 +751,7 @@ export default function DashboardPage() {
 
         {/* ── Live AI Insight (from Dashboard - real-time) ── */}
         <SectionCard title="Live AI Safety Insight">
-          <LiveAIInsight autoLoad={true} compact={false} />
+          <LiveAIInsight autoLoad={true} compact={false} range={range} zone={zone} />
         </SectionCard>
 
       </div>
