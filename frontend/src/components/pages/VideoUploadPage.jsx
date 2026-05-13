@@ -7,6 +7,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useVideoUpload } from '../../hooks/useVideoUpload'
 import { useAnalysis }    from '../../hooks/useAnalysis'
 import AnalysisResultCard from '../ui/AnalysisResultCard'
+import AIInsightPanel     from '../ui/AIInsightPanel'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -172,7 +173,10 @@ export default function VideoUploadPage() {
     uploadFile, deleteVideo, deleteAllVideos,
   } = useVideoUpload()
 
-  const { startAnalysis, analysisStatus, analysisResults, fullAnalysisData, analysisProgress } = useAnalysis()
+  const {
+    startAnalysis, analysisStatus, analysisResults, fullAnalysisData, analysisProgress,
+    aiInsights, aiInsightsLoading,
+  } = useAnalysis()
 
   const [dragOver,     setDragOver]     = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -576,6 +580,7 @@ export default function VideoUploadPage() {
                videoName={videos.find(v => v.id === lastUploadId)?.original_name}
              />
           )}
+
         </div>
 
         {/* ── MIDDLE: Video Preview ── */}
@@ -675,6 +680,16 @@ export default function VideoUploadPage() {
             </div>
           </div>
 
+          {/* AI Groq insight panel — appears after analysis completes */}
+          {(lastStatus === 'completed' || aiInsights[lastUploadId]) && (
+            <div style={{ marginTop: '16px' }}>
+              <AIInsightPanel
+                insight={aiInsights[lastUploadId]}
+                loading={aiInsightsLoading[lastUploadId]}
+                compact={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── RIGHT: Previous Analyses ── */}

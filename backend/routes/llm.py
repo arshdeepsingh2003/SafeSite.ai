@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from bson import ObjectId
 from services.groq_service import (
     analyze_detections,
     generate_daily_report,
@@ -60,6 +61,49 @@ async def analyze(
     """
     result = await analyze_detections(summary.dict())
     return result
+
+
+# ── POST /llm/analyze-video/{video_id} ────────────────────────
+@router.post("/analyze-video/{video_id}")
+async def analyze_video_insights(
+    video_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Generate Groq AI insights for a completed video analysis.
+    Fetches the analysis results from the video document,
+    builds a detection summary, and sends it to Groq for safety insights.
+
+    Returns the same format as POST /llm/analyze including:
+    insight, risk_level, top_concern, recommendations
+    """
+    try:
+        video = await db["videos"].find_one({"_id": ObjectId(video_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid video ID")
+
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    result = video.get("analysis_result", {})
+    if not result:
+        raise HTTPException(status_code=400, detail="Video has not been analyzed yet")
+
+    summary = result.get("summary", {})
+
+    detection_summary = {
+        "zone":                 video.get("zone", "Unknown Zone"),
+        "total_workers":        summary.get("total_workers", 0),
+        "compliant":            summary.get("compliant_workers", 0),
+        "no_helmet":            summary.get("no_helmet", 0),
+        "no_vest":              summary.get("no_vest", 0),
+        "no_helmet_and_no_vest": summary.get("no_helmet_and_no_vest", 0),
+        "compliance_rate":      summary.get("compliance_rate", 0),
+        "frames_analyzed":      result.get("video_info", {}).get("total_frames", 0),
+    }
+
+    insight = await analyze_detections(detection_summary)
+    return insight
 
 
 # ── GET /llm/report/daily ─────────────────────────────────────

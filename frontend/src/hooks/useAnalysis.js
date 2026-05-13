@@ -7,7 +7,23 @@ export function useAnalysis() {
   const [analysisResults, setAnalysisResults] = useState({})
   const [fullAnalysisData, setFullAnalysisData] = useState({})
   const [analysisProgress, setAnalysisProgress] = useState({})
+  const [aiInsights, setAiInsights] = useState({})
+  const [aiInsightsLoading, setAiInsightsLoading] = useState({})
   const pollingRefs = useRef({})
+
+  const fetchAIInsight = useCallback(async (videoId) => {
+    try {
+      setAiInsightsLoading(prev => ({ ...prev, [videoId]: true }))
+      const res = await api.post(`/llm/analyze-video/${videoId}`)
+      setAiInsights(prev => ({ ...prev, [videoId]: res.data }))
+      return res.data
+    } catch {
+      console.error('Failed to fetch AI insight')
+      return null
+    } finally {
+      setAiInsightsLoading(prev => ({ ...prev, [videoId]: false }))
+    }
+  }, [])
 
   const fetchFullResults = useCallback(async (videoId) => {
     try {
@@ -47,6 +63,8 @@ export function useAnalysis() {
 
           await fetchFullResults(videoId)
 
+          fetchAIInsight(videoId)
+
           toast.success(`Analysis complete! Compliance rate: ${summary?.compliance_rate ?? '?'}%`)
         }
 
@@ -61,7 +79,7 @@ export function useAnalysis() {
     }, 2000)
 
     pollingRefs.current[videoId] = interval
-  }, [fetchFullResults])
+  }, [fetchFullResults, fetchAIInsight])
 
   const startAnalysis = useCallback(async (videoId) => {
     if (!videoId) return
@@ -98,9 +116,12 @@ export function useAnalysis() {
     startAnalysis,
     checkStatus,
     fetchFullResults,
+    fetchAIInsight,
     analysisStatus,
     analysisResults,
     fullAnalysisData,
     analysisProgress,
+    aiInsights,
+    aiInsightsLoading,
   }
 }
