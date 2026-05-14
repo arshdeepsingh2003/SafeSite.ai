@@ -16,6 +16,8 @@ export function StreamProvider({ children }) {
   const [detectionHistory, setDetectionHistory] = useState([])
   const [streamUrl, setStreamUrl] = useState('')
   const [originalUrl, setOriginalUrl] = useState('')
+  const [aiInsight, setAiInsight] = useState(null)
+  const [aiInsightLoading, setAiInsightLoading] = useState(false)
 
   const detectionsRef = useRef([])
   const streamSessionIdRef = useRef(null)
@@ -56,6 +58,13 @@ export function StreamProvider({ children }) {
   }, [])
 
   useSocketEvent('live_detection', handleLiveDetection)
+
+  const handleAiInsight = useCallback((data) => {
+    setAiInsight(data)
+    setAiInsightLoading(false)
+  }, [])
+
+  useSocketEvent('ai_insight', handleAiInsight)
 
   const startAnalysis = useCallback(async (url, zone = 'Zone A', camera = 'Camera 1') => {
     setIsAnalyzing(true)
@@ -116,6 +125,10 @@ export function StreamProvider({ children }) {
       detectionHistory,
       detectionsRef,
       streamUrl, originalUrl,
+      aiInsight,
+      aiInsightLoading,
+      setAiInsight,
+      setAiInsightLoading,
       setStreamSessionId,
       setIsAnalyzing,
       setAnalysisError,

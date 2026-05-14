@@ -549,8 +549,12 @@ function LiveMonitoringPage() {
               </span>
             )}
             <span style={{ marginLeft: (isAnalyzing || analysisError) ? '0' : 'auto', fontSize: '12px', color: '#8b949e' }}>
-              Detection Confidence: <strong style={{ color: '#e6edf3' }}>High (0.85)</strong>
-            </span>
+                Detection Confidence: <strong style={{ color: '#e6edf3' }}>
+                  {currentDetections.length > 0
+                    ? `${Math.round(currentDetections.reduce((a, d) => a + (d.confidence || 0), 0) / currentDetections.length * 100)}%`
+                    : '--'}
+                </strong>
+              </span>
           </div>
         </div>
 
@@ -596,7 +600,7 @@ function LiveMonitoringPage() {
       </div>
 
       <div style={{ marginBottom: '20px' }}>
-        <LiveAIInsight autoLoad={true} refreshEvery={120} />
+        <LiveAIInsight autoLoad={true} refreshEvery={30} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>

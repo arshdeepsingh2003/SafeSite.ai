@@ -16,14 +16,18 @@
 #   "alert_resolved"  → an alert was marked resolved
 #   "system_status"   → heartbeat every 30s (cameras online, etc.)
 #   "stats_update"    → updated dashboard stats
+#   "ai_insight"      → real-time AI-generated safety insight (every 5-10s)
 #
 # EVENTS we receive:
 #   "join_room"       → frontend joins a zone-specific room
 #   "ping"            → frontend checks connection is alive
 # ============================================================
 
+import asyncio
 import socketio
 from datetime import datetime
+from utils.aggregate_detections import DetectionAggregator
+from services.groq_service import analyze_detections
 
 # ── Create the Socket.IO server ───────────────────────────────
 # async_mode="asgi" makes it work with FastAPI (both are async)
@@ -40,6 +44,13 @@ sio = socketio.AsyncServer(
 
 # Track connected clients (just for logging)
 connected_clients: set[str] = set()
+
+# ── Detection Aggregator for AI insight generation ────────────
+# Import this from other modules (e.g. live_detection.py) to feed data:
+#   from socket_server import aggregator
+#   aggregator.add_snapshot(detection_payload)
+aggregator = DetectionAggregator(window_seconds=30, trend_window_seconds=120)
+_insight_task_started = False
 
 
 # ── Connection lifecycle events ───────────────────────────────
@@ -170,9 +181,62 @@ async def emit_system_status(status: dict):
     })
 
 
+# ── AI Insight generation task ─────────────────────────────────
+async def _run_ai_insight_loop():
+    """
+    Periodically aggregate detection data and generate AI insights.
+    Runs every 8 seconds, accumulates data from the aggregator,
+    sends to Groq, and emits 'ai_insight' to all connected clients.
+    """
+    global _insight_task_started
+    _insight_task_started = True
+    print("🧠 AI Insight loop started — generating insights every ~8s")
+    while True:
+        await asyncio.sleep(8)
+        try:
+            if not aggregator.has_data:
+                continue
+
+            if not aggregator.should_regenerate(min_interval=8):
+                continue
+
+            payload = aggregator.build_groq_payload()
+            if not payload:
+                continue
+
+            # Add previous insight for trend comparison
+            insight = await analyze_detections(payload)
+
+            if insight:
+                insight["note"] = "Real-time AI insight"
+                aggregator.set_last_insight(insight)
+                await sio.emit("ai_insight", insight)
+                print(f"🧠 Emitted ai_insight | risk={insight.get('risk_level')} | "
+                      f"workers={payload.get('total_workers')} | "
+                      f"compliance={payload.get('compliance_rate')}%")
+        except Exception as e:
+            print(f"⚠️  AI insight loop error: {e}")
+
+
+async def emit_ai_insight(insight: dict):
+    """
+    Manually emit an AI insight to all connected clients.
+    Can be called from other routes if needed.
+    """
+    await sio.emit("ai_insight", insight)
+    print(f"📡 Emitted ai_insight (manual)")
+
+
+def start_insight_loop():
+    """Start the background insight generation loop (called from main.py)."""
+    if not _insight_task_started:
+        asyncio.create_task(_run_ai_insight_loop())
+
+
 # ── live_detection event ──────────────────────────────────────
 # Fired by live_detect.py every time it processes a frame.
-# We just forward the payload to ALL connected browser clients.
+# We forward the payload to ALL connected browser clients
+# AND accumulate it for AI insight generation.
 @sio.event
 async def live_detection(sid, data):
     """
@@ -182,6 +246,9 @@ async def live_detection(sid, data):
     The frontend canvas overlay listens for this event and draws
     bounding boxes based on the normalized bbox coordinates.
     """
+    # Accumulate for AI insight generation
+    aggregator.add_snapshot(data)
+
     # Forward to all browser clients in the default room
     await sio.emit("live_detection", data, skip_sid=sid)
 

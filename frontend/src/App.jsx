@@ -10,6 +10,7 @@ import { AlertProvider }  from './context/AlertContext'
 import { SocketProvider } from './context/SocketContext'
 import { SoundProvider }  from './context/SoundContext'
 import { StreamProvider } from './context/StreamContext'
+import { UploadInsightProvider } from './context/UploadInsightContext'
 import ProtectedRoute     from './components/layout/ProtectedRoute'
 import AppLayout          from './components/layout/AppLayout'
 
@@ -43,6 +44,7 @@ export default function App() {
         <SoundProvider>
           <SocketProvider>
             <StreamProvider>
+            <UploadInsightProvider>
             <BrowserRouter>
               <Toaster
                 position="top-right"
@@ -77,6 +79,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </BrowserRouter>
+            </UploadInsightProvider>
             </StreamProvider>
           </SocketProvider>
         </SoundProvider>

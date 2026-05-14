@@ -63,8 +63,6 @@ export function useAnalysis() {
 
           await fetchFullResults(videoId)
 
-          fetchAIInsight(videoId)
-
           toast.success(`Analysis complete! Compliance rate: ${summary?.compliance_rate ?? '?'}%`)
         }
 
@@ -79,7 +77,7 @@ export function useAnalysis() {
     }, 2000)
 
     pollingRefs.current[videoId] = interval
-  }, [fetchFullResults, fetchAIInsight])
+  }, [fetchFullResults])
 
   const startAnalysis = useCallback(async (videoId) => {
     if (!videoId) return

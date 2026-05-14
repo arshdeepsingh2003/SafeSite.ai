@@ -1,24 +1,7 @@
-// ============================================================
-// SafeSite AI — LiveAIInsight  (Phase 9)
-// File: frontend/src/components/ui/LiveAIInsight.jsx
-//
-// A self-contained widget that:
-//   1. Fetches analytics summary with current filters from /analytics/summary
-//   2. Sends it to Groq via /llm/analyze
-//   3. Renders the insight using <AIInsightPanel>
-//
-// Used on: Dashboard (compact), LiveMonitoringPage (full)
-//
-// Props:
-//   compact      — boolean, smaller card layout
-//   autoLoad     — boolean, fetch on mount (default true)
-//   refreshEvery — seconds between auto-refresh (0 = off)
-//   range        — analytics range filter (today/week/month/3months)
-//   zone         — zone filter (all/Zone A/Zone B/etc)
-// ============================================================
-
 import { useState, useEffect, useCallback } from 'react'
 import { useLLM }       from '../../hooks/useLLM'
+import { useStream }    from '../../context/StreamContext'
+import { useSocket }    from '../../context/SocketContext'
 import AIInsightPanel   from './AIInsightPanel'
 import api from '../../services/api'
 
@@ -30,18 +13,19 @@ export default function LiveAIInsight({
   zone         = 'all',
 }) {
   const { analyzeDetections, isConfigured, loadingStatus } = useLLM()
-  const [insight, setInsight]   = useState(null)
+  const { aiInsight, setAiInsight, liveSummary } = useStream()
+  const { isConnected } = useSocket()
   const [loading, setLoading]   = useState(false)
   const [lastFetched, setLastFetched] = useState(null)
+  const [source, setSource] = useState('polling')
 
   const fetchInsight = useCallback(async () => {
+    if (loading) return
     setLoading(true)
     try {
-      // 1. Get analytics summary with filters
       const summaryRes = await api.get(`/analytics/summary?range=${range}&zone=${zone}`)
       const s = summaryRes.data
 
-      // 2. Build the payload for Groq
       const totalViolations = s.total_violations ?? 0
       const insightZone = zone !== 'all' ? zone : 'All Zones (Site-wide)'
 
@@ -56,30 +40,41 @@ export default function LiveAIInsight({
         frames_analyzed:       totalViolations * 10 || 100,
       }
 
-      // 3. Ask Groq for insight
       const result = await analyzeDetections(payload)
-      setInsight(result)
-      setLastFetched(new Date())
+      if (result) {
+        setAiInsight(result)
+        setLastFetched(new Date())
+      }
     } catch (err) {
       console.error('Could not load AI insight:', err)
     } finally {
       setLoading(false)
     }
-  }, [analyzeDetections, range, zone])
+  }, [analyzeDetections, range, zone, loading, setAiInsight])
 
-  // Auto-load on mount and when filters change
   useEffect(() => {
-    if (autoLoad && !loadingStatus) fetchInsight()
-  }, [autoLoad, loadingStatus, fetchInsight])
+    if (isConnected) {
+      setSource('socket')
+    } else {
+      setSource('polling')
+    }
+  }, [isConnected])
 
-  // Auto-refresh interval
+  useEffect(() => {
+    if (autoLoad && !loadingStatus) {
+      if (!isConnected) {
+        fetchInsight()
+      }
+    }
+  }, [autoLoad, loadingStatus, fetchInsight, isConnected])
+
   useEffect(() => {
     if (!refreshEvery || refreshEvery <= 0) return
+    if (isConnected) return
     const id = setInterval(fetchInsight, refreshEvery * 1000)
     return () => clearInterval(id)
-  }, [refreshEvery, fetchInsight])
+  }, [refreshEvery, fetchInsight, isConnected])
 
-  // While checking Groq status
   if (loadingStatus) {
     return (
       <div style={{
@@ -91,7 +86,6 @@ export default function LiveAIInsight({
     )
   }
 
-  // Groq not configured
   if (!isConfigured && !loading) {
     return (
       <div style={{
@@ -128,19 +122,35 @@ export default function LiveAIInsight({
     )
   }
 
+  const displayInsight = aiInsight
+
   return (
     <div>
-      <AIInsightPanel insight={insight} loading={loading} compact={compact} />
-      {/* Refresh button + last fetched time */}
+      <AIInsightPanel insight={displayInsight} loading={loading} compact={compact} />
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginTop: '6px', padding: '0 2px',
       }}>
-        {lastFetched && (
-          <span style={{ fontSize: '10px', color: '#8b949e' }}>
-            Updated {lastFetched.toLocaleTimeString()}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isConnected && (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              fontSize: '10px', color: '#22c55e',
+            }}>
+              <span style={{
+                width: '5px', height: '5px', borderRadius: '50%',
+                background: '#22c55e',
+                animation: 'pulse 1.5s infinite',
+              }} />
+              Real-time
+            </span>
+          )}
+          {lastFetched && !isConnected && (
+            <span style={{ fontSize: '10px', color: '#8b949e' }}>
+              Updated {lastFetched.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
         <button
           onClick={fetchInsight}
           disabled={loading}

@@ -4,10 +4,11 @@
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useVideoUpload } from '../../hooks/useVideoUpload'
-import { useAnalysis }    from '../../hooks/useAnalysis'
-import AnalysisResultCard from '../ui/AnalysisResultCard'
-import AIInsightPanel     from '../ui/AIInsightPanel'
+import { useVideoUpload }   from '../../hooks/useVideoUpload'
+import { useAnalysis }      from '../../hooks/useAnalysis'
+import { useUploadInsight } from '../../context/UploadInsightContext'
+import AnalysisResultCard   from '../ui/AnalysisResultCard'
+import UploadAIReport       from '../ui/UploadAIReport'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -106,7 +107,7 @@ function DetectionItem({ det }) {
   )
 }
 
-function PreviousItem({ video, onDelete, onAnalyze, analyzing }) {
+function PreviousItem({ video, onDelete, onAnalyze, onView, analyzing }) {
   const isProcessing = analyzing || video.status === 'processing'
   return (
     <div style={{
@@ -137,29 +138,44 @@ function PreviousItem({ video, onDelete, onAnalyze, analyzing }) {
 
           {/* Show Analyze button only for uploaded (not stream, not yet analyzed) */}
            {video.type !== 'stream' && video.status === 'uploaded' && (
+              <button
+                onClick={() => onAnalyze(video.id)}
+                disabled={isProcessing}
+                style={{
+                  padding: '2px 8px',
+                  background: 'rgba(99,102,241,0.15)',
+                  border: '1px solid rgba(99,102,241,0.4)',
+                  borderRadius: '6px', color: '#818cf8',
+                  fontSize: '11px', cursor: 'pointer', fontWeight: '600',
+                }}
+              >
+                {isProcessing ? '⏳ Analyzing…' : '🤖 Analyze'}
+              </button>
+           )}
+
+           {video.status === 'completed' && (
              <button
-               onClick={() => onAnalyze(video.id)}
-               disabled={isProcessing}
+               onClick={() => onView(video.id)}
                style={{
                  padding: '2px 8px',
-                 background: 'rgba(99,102,241,0.15)',
-                 border: '1px solid rgba(99,102,241,0.4)',
-                 borderRadius: '6px', color: '#818cf8',
+                 background: 'rgba(34,197,94,0.15)',
+                 border: '1px solid rgba(34,197,94,0.4)',
+                 borderRadius: '6px', color: '#22c55e',
                  fontSize: '11px', cursor: 'pointer', fontWeight: '600',
                }}
              >
-               {isProcessing ? '⏳ Analyzing…' : '🤖 Analyze'}
+               📋 View Report
              </button>
            )}
 
            <button
-             onClick={() => onDelete(video.id, video.original_name || 'this video')}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: '#8b949e', fontSize: '12px', padding: '0 2px',
-            }}
-            title="Delete"
-          >🗑</button>
+              onClick={() => onDelete(video.id, video.original_name || 'this video')}
+             style={{
+               background: 'none', border: 'none', cursor: 'pointer',
+               color: '#8b949e', fontSize: '12px', padding: '0 2px',
+             }}
+             title="Delete"
+           >🗑</button>
         </div>
       </div>
     </div>
@@ -174,9 +190,14 @@ export default function VideoUploadPage() {
   } = useVideoUpload()
 
   const {
-    startAnalysis, analysisStatus, analysisResults, fullAnalysisData, analysisProgress,
-    aiInsights, aiInsightsLoading,
+    startAnalysis, checkStatus, analysisStatus, analysisResults, fullAnalysisData,
+    analysisProgress, fetchFullResults,
   } = useAnalysis()
+
+  const {
+    uploadInsights, uploadInsightLoading, uploadInsightError,
+    generateInsight, fetchSavedInsight,
+  } = useUploadInsight()
 
   const [dragOver,     setDragOver]     = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
@@ -187,6 +208,32 @@ export default function VideoUploadPage() {
   const changeFileInputRef = useRef(null)
 
   const ZONE_OPTIONS = ['Zone A', 'Zone B', 'Zone C', 'Zone D']
+
+  // ── Derived state (defined before effects that use them) ──
+  const fileSizeMB = selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(1) : null
+  const lastResult = lastUploadId ? analysisResults[lastUploadId] : null
+  const lastStatus = lastUploadId ? analysisStatus[lastUploadId] : null
+  const lastFullData = lastUploadId ? fullAnalysisData[lastUploadId] : null
+  const lastVideo = lastUploadId ? videos.find(v => v.id === lastUploadId) : null
+  const originalVideoUrl = lastVideo?.stored_name
+    ? makeFullUrl(`/uploads/videos/${lastVideo.stored_name}`)
+    : null
+  const frameDetections = lastFullData?.frame_detections || []
+  const hasFrameDetections = frameDetections.length > 0
+
+  // When analysis completes, generate the upload insight report
+  useEffect(() => {
+    if (lastStatus === 'completed' && lastUploadId && !uploadInsights[lastUploadId] && !uploadInsightLoading[lastUploadId]) {
+      generateInsight(lastUploadId)
+    }
+  }, [lastStatus, lastUploadId, uploadInsights, uploadInsightLoading, generateInsight])
+
+  // Load saved insights when viewing previously analyzed videos
+  useEffect(() => {
+    if (!lastUploadId || lastStatus !== 'completed') return
+    if (uploadInsights[lastUploadId]) return
+    fetchSavedInsight(lastUploadId)
+  }, [lastUploadId, lastStatus, uploadInsights, fetchSavedInsight])
 
   // ── Detection Output refs and state ──
   const outputVideoRef = useRef(null)
@@ -232,20 +279,21 @@ export default function VideoUploadPage() {
     }
   }
 
-  const fileSizeMB = selectedFile ? (selectedFile.size / 1024 / 1024).toFixed(1) : null
+  const loadPreviousAnalysis = useCallback(async (videoId) => {
+    setLastUploadId(videoId)
+    setSelectedFile(null)
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }
 
-  // Find the result for the most recently uploaded video
-  const lastResult = lastUploadId ? analysisResults[lastUploadId] : null
-  const lastStatus = lastUploadId ? analysisStatus[lastUploadId] : null
-  const lastFullData = lastUploadId ? fullAnalysisData[lastUploadId] : null
-
-  // Get URLs for detection output
-  const lastVideo = lastUploadId ? videos.find(v => v.id === lastUploadId) : null
-  const originalVideoUrl = lastVideo?.stored_name
-    ? makeFullUrl(`/uploads/videos/${lastVideo.stored_name}`)
-    : null
-  const frameDetections = lastFullData?.frame_detections || []
-  const hasFrameDetections = frameDetections.length > 0
+    const data = await checkStatus(videoId)
+    if (data?.status === 'completed') {
+      if (!fullAnalysisData[videoId]) {
+        await fetchFullResults(videoId)
+      }
+      if (!uploadInsights[videoId]) {
+        fetchSavedInsight(videoId)
+      }
+    }
+  }, [fullAnalysisData, uploadInsights, fetchSavedInsight, fetchFullResults, checkStatus])
 
   // ── Canvas sync and draw functions ──
   function syncOutputCanvasSize() {
@@ -680,14 +728,24 @@ export default function VideoUploadPage() {
             </div>
           </div>
 
-          {/* AI Groq insight panel — appears after analysis completes */}
-          {(lastStatus === 'completed' || aiInsights[lastUploadId]) && (
+          {/* Upload AI Report — appears after analysis completes and report generates */}
+          {(lastStatus === 'completed' || uploadInsights[lastUploadId]) && (
             <div style={{ marginTop: '16px' }}>
-              <AIInsightPanel
-                insight={aiInsights[lastUploadId]}
-                loading={aiInsightsLoading[lastUploadId]}
-                compact={false}
+              <UploadAIReport
+                report={uploadInsights[lastUploadId]}
+                loading={uploadInsightLoading[lastUploadId]}
+                videoName={lastVideo?.original_name}
               />
+              {uploadInsightError[lastUploadId] && (
+                <div style={{
+                  marginTop: '8px', padding: '8px 12px',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.3)',
+                  borderRadius: '8px', fontSize: '11px', color: '#ef4444',
+                }}>
+                  {uploadInsightError[lastUploadId]}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -723,15 +781,16 @@ export default function VideoUploadPage() {
               No videos uploaded yet.<br />Upload your first video!
             </div>
           ) : (
-             videos.slice(0, 8).map(v => (
-               <PreviousItem
-                 key={v.id}
-                 video={v}
-                 onDelete={deleteVideo}
-                 onAnalyze={startAnalysis}
-                 analyzing={analysisStatus[v.id] === 'processing'}
-               />
-             ))
+              videos.slice(0, 8).map(v => (
+                <PreviousItem
+                  key={v.id}
+                  video={v}
+                  onDelete={deleteVideo}
+                  onAnalyze={startAnalysis}
+                  onView={loadPreviousAnalysis}
+                  analyzing={analysisStatus[v.id] === 'processing'}
+                />
+              ))
           )}
 
           {/* Tips */}

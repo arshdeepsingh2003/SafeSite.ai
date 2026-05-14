@@ -332,7 +332,8 @@ async def _run_stream_session(session_id: str, stream_url: str, zone: str, camer
         }
 
         try:
-            from socket_server import sio
+            from socket_server import sio, aggregator
+            aggregator.add_snapshot(payload)
             await sio.emit("live_detection", payload)
         except Exception as e:
             print(f"socket emit: {e}")
@@ -412,7 +413,8 @@ async def receive_live_detection(data: dict):
             alerts_created += 1
 
     try:
-        from socket_server import sio
+        from socket_server import sio, aggregator
+        aggregator.add_snapshot(data)
         await sio.emit("live_detection", data)
     except Exception as e:
         print(f"socket: {e}")

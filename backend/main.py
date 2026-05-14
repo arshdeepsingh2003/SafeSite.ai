@@ -22,8 +22,9 @@ from routes.llm         import router as llm_router
 from routes.dashboard   import router as dashboard_router
 from routes.analytics   import router as analytics_router   # ← Phase 11
 from routes.reports     import router as reports_router     # ← Phase 12
-from routes.proxy       import router as proxy_router       # HLS proxy
-from socket_server      import sio, emit_system_status
+from routes.proxy            import router as proxy_router            # HLS proxy
+from routes.upload_insights  import router as upload_insights_router   # Upload AI insights
+from socket_server      import sio, emit_system_status, start_insight_loop
 import os
 
 app = FastAPI(
@@ -48,6 +49,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 async def startup():
     await connect_db()
     asyncio.create_task(_heartbeat())
+    start_insight_loop()
     print("SafeSite AI v13.0 - Analytics active")
     print("   REST:      http://localhost:8000/docs")
     print("   WebSocket: ws://localhost:8000/socket.io/")
@@ -77,6 +79,7 @@ app.include_router(dashboard_router)  # /dashboard/...
 app.include_router(analytics_router)  # /analytics/...  ← Phase 11
 app.include_router(reports_router)    # /reports/...  ← Phase 12
 app.include_router(proxy_router)      # /proxy/hls...
+app.include_router(upload_insights_router)  # /upload-insights/...
 
 @app.get("/")
 def root():
