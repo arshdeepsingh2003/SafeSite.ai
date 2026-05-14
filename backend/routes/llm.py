@@ -53,7 +53,6 @@ async def analyze(
     - A human-readable safety insight paragraph
     - Risk level (low/medium/high/critical)
     - Top concern
-    - 3 action recommendations
 
     Used by:
     - VideoUploadPage after analysis completes
@@ -75,7 +74,7 @@ async def analyze_video_insights(
     builds a detection summary, and sends it to Groq for safety insights.
 
     Returns the same format as POST /llm/analyze including:
-    insight, risk_level, top_concern, recommendations
+    insight, risk_level, top_concern
     """
     try:
         video = await db["videos"].find_one({"_id": ObjectId(video_id)})

@@ -592,8 +592,11 @@ function LiveMonitoringPage() {
             </div>
           </div>
 
-          <LiveAIInsight autoLoad={true} refreshEvery={120} />
         </div>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <LiveAIInsight autoLoad={true} refreshEvery={120} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>

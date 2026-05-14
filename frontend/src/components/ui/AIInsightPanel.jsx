@@ -156,40 +156,6 @@ export default function AIInsightPanel({ insight, loading, compact = false }) {
           </div>
         )}
 
-        {/* Recommendations */}
-        {insight.recommendations?.length > 0 && !compact && (
-          <div>
-            <div style={{
-              fontSize:     '12px',
-              fontWeight:   '700',
-              color:        '#e6edf3',
-              marginBottom: '8px',
-            }}>
-              ✅ Recommended Actions
-            </div>
-            {insight.recommendations.map((rec, i) => (
-              <div key={i} style={{
-                display:      'flex',
-                alignItems:   'flex-start',
-                gap:          '8px',
-                marginBottom: '6px',
-                fontSize:     '12px',
-                color:        '#8b949e',
-              }}>
-                <div style={{
-                  width:          '18px', height: '18px', flexShrink: 0,
-                  background:     'rgba(34,197,94,0.15)',
-                  border:         '1px solid rgba(34,197,94,0.3)',
-                  borderRadius:   '50%',
-                  display:        'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize:       '9px', fontWeight: '700', color: '#22c55e',
-                }}>{i + 1}</div>
-                <span style={{ paddingTop: '1px', lineHeight: 1.5 }}>{rec}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Generated at */}
         {insight.generated_at && (
           <div style={{

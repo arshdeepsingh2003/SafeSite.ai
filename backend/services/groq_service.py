@@ -85,14 +85,12 @@ Provide a safety analysis in this exact JSON format:
 {{
   "insight": "2-3 sentence summary of the safety situation",
   "risk_level": "low|medium|high|critical",
-  "top_concern": "single biggest safety issue in one sentence",
-  "recommendations": ["action 1", "action 2", "action 3"]
+  "top_concern": "single biggest safety issue in one sentence"
 }}
 
 Rules:
 - Be specific and actionable, not generic
 - risk_level is "critical" if compliance < 50%, "high" if < 70%, "medium" if < 85%, "low" otherwise
-- Recommendations must be concrete steps a site manager can take TODAY
 - Keep insight under 60 words
 - Return ONLY the JSON, no other text"""
 
@@ -110,7 +108,6 @@ Rules:
             "insight":         result.get("insight", ""),
             "risk_level":      result.get("risk_level", "medium"),
             "top_concern":     result.get("top_concern", ""),
-            "recommendations": result.get("recommendations", []),
             "generated_by":    "groq",
             "model":           GROQ_MODEL,
             "generated_at":    datetime.utcnow().isoformat(),
@@ -180,15 +177,6 @@ Write a professional safety report in this exact JSON format. Be detailed and da
   ],
   "zone_analysis": "Detailed paragraph analyzing EACH zone's performance. Reference specific violation counts per zone. Identify which zones need immediate attention and why.",
   "trend_analysis": "Paragraph analyzing patterns: which violation type is most common, what time of day sees the most violations, whether the compliance rate is improving or declining. Be specific.",
-  "immediate_actions": [
-    "Urgent action 1 — specific to the data above",
-    "Urgent action 2 — specific to the data above"
-  ],
-  "recommendations": [
-    "Recommendation 1 — targeted intervention based on the data",
-    "Recommendation 2 — systemic improvement suggestion",
-    "Recommendation 3 — preventive measure for the future"
-  ],
   "conclusion": "2 sentence closing statement summarizing the path forward"
 }}
 
@@ -196,7 +184,6 @@ RULES:
 - Be professional, specific, and data-driven — ALWAYS reference actual numbers
 - zone_analysis MUST discuss each zone individually with its specific violation count
 - trend_analysis MUST identify which violation type dominates and any time-based patterns
-- immediate_actions MUST be urgent steps that can be taken today
 - Keep executive_summary under 100 words
 - Return ONLY valid JSON — no markdown, no code fences, no extra text"""
 
@@ -298,15 +285,9 @@ def _fallback_analysis(data: dict) -> dict:
         ),
         "risk_level":      level,
         "top_concern":     f"{both} workers missing both helmet and vest" if both > 0 else "General PPE non-compliance",
-        "recommendations": [
-            "Immediately dispatch a safety officer to the violation zone",
-            "Halt work for non-compliant workers until PPE is worn",
-            "Conduct a mandatory safety briefing at the next shift change",
-        ],
         "generated_by": "rule_based",
         "model":        "none",
         "generated_at": datetime.utcnow().isoformat(),
-        "note":         "Add GROQ_API_KEY to backend/.env for AI-powered insights",
     }
 
 
@@ -346,16 +327,6 @@ def _fallback_report(data: dict) -> dict:
             f"Combined PPE violations (both missing) total {both} high-risk events. "
             f"Reinforcing helmet compliance would yield the greatest safety improvement."
         ),
-        "immediate_actions": [
-            f"Send safety supervisor to {top_zone} for immediate inspection",
-            "Review all unresolved violations and assign responsibility",
-            "Brief all shift workers on PPE requirements before next shift",
-        ],
-        "recommendations": [
-            "Schedule mandatory PPE compliance training for all workers",
-            "Increase supervision in high-violation zones during peak hours",
-            "Configure Groq API key for AI-powered detailed report analysis",
-        ],
         "conclusion": (
             f"Safety compliance at {rate:.1f}% requires immediate attention. "
             f"Consistent enforcement and regular safety briefings are essential to reduce violations."
@@ -364,7 +335,6 @@ def _fallback_report(data: dict) -> dict:
         "generated_by":      "rule_based",
         "model":             "none",
         "generated_at":      datetime.utcnow().isoformat(),
-        "note":              "Add GROQ_API_KEY to backend/.env for AI-powered reports",
         "raw_data":          data,
     }
 

@@ -727,14 +727,24 @@ export default function DashboardPage() {
                   \u25CF {insight.risk_level.toUpperCase()} RISK
                 </div>
               )}
-              <div>
-                {(insight.recommendations || [insight.summary]).filter(Boolean).slice(0,4).map((r, i) => (
-                  <div key={i} style={{ display:'flex', gap:'8px', marginBottom:'8px', fontSize:'12px', color:'#8b949e', lineHeight:1.5 }}>
-                    <span style={{ color:'#6366f1', flexShrink:0 }}>\u2022</span>
-                    <span>{typeof r === 'string' ? r : r.action || r}</span>
+              <p style={{ fontSize:'13px', color:'#c9d1d9', lineHeight:'1.7', marginBottom:'12px' }}>
+                {insight.insight}
+              </p>
+              {insight.top_concern && (
+                <div style={{
+                  display:'flex', alignItems:'flex-start', gap:'8px',
+                  padding:'10px 12px',
+                  background: insight.risk_level === 'high' ? 'rgba(239,68,68,0.08)' : insight.risk_level === 'medium' ? 'rgba(234,179,8,0.08)' : 'rgba(34,197,94,0.08)',
+                  border: insight.risk_level === 'high' ? '1px solid rgba(239,68,68,0.2)' : insight.risk_level === 'medium' ? '1px solid rgba(234,179,8,0.2)' : '1px solid rgba(34,197,94,0.2)',
+                  borderRadius:'8px', fontSize:'12px',
+                }}>
+                  <span style={{ flexShrink:0, fontSize:'14px' }}>\u26A0\uFE0F</span>
+                  <div>
+                    <div style={{ fontWeight:'700', color: '#e6edf3', marginBottom:'2px' }}>Top Concern</div>
+                    <div style={{ color:'#8b949e' }}>{insight.top_concern}</div>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
               <a href="/reports" style={{
                 display:'block', marginTop:'12px', padding:'7px',
                 textAlign:'center', background:'rgba(99,102,241,0.1)',

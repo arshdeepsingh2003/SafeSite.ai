@@ -240,12 +240,8 @@ export default function ReportsPage() {
           compliance_rate:       summary.compliance_rate,
           frames_analyzed:       summary.total_violations * 5,
         })
-        // Turn recommendations into bullet points
-        if (res?.recommendations?.length) {
-          setInsights(res.recommendations)
-        } else if (res?.summary) {
-          // Split summary into sentences as bullets
-          setInsights(res.summary.split('. ').filter(s => s.length > 10).slice(0, 5))
+        if (res?.insight) {
+          setInsights([res.insight])
         }
       } catch { /* silently ignore */ }
       finally { setInsightLoad(false) }
