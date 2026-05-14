@@ -10,6 +10,7 @@ export function useAnalysis() {
   const [aiInsights, setAiInsights] = useState({})
   const [aiInsightsLoading, setAiInsightsLoading] = useState({})
   const pollingRefs = useRef({})
+  const completedRefs = useRef({})  // Tracks videos already handled as completed
 
   const fetchAIInsight = useCallback(async (videoId) => {
     try {
@@ -62,14 +63,11 @@ export function useAnalysis() {
           }
 
           await fetchFullResults(videoId)
-
-          toast.success(`Analysis complete! Compliance rate: ${summary?.compliance_rate ?? '?'}%`)
         }
 
         if (status === 'error') {
           clearInterval(pollingRefs.current[videoId])
           delete pollingRefs.current[videoId]
-          toast.error('Analysis failed. Check the AI service logs.')
         }
       } catch {
         // Ignore polling errors silently

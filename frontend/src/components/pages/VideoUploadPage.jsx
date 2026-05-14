@@ -221,19 +221,18 @@ export default function VideoUploadPage() {
   const frameDetections = lastFullData?.frame_detections || []
   const hasFrameDetections = frameDetections.length > 0
 
-  // When analysis completes, generate the upload insight report
-  useEffect(() => {
-    if (lastStatus === 'completed' && lastUploadId && !uploadInsights[lastUploadId] && !uploadInsightLoading[lastUploadId]) {
-      generateInsight(lastUploadId)
-    }
-  }, [lastStatus, lastUploadId, uploadInsights, uploadInsightLoading, generateInsight])
+  // ── Consolidated insight generation (runs ONCE per completed video) ──
+  // Uses a ref to prevent duplicate calls in React StrictMode (dev only).
+  const insightTriggeredRef = useRef({})
 
-  // Load saved insights when viewing previously analyzed videos
   useEffect(() => {
-    if (!lastUploadId || lastStatus !== 'completed') return
+    if (lastStatus !== 'completed' || !lastUploadId) return
+    if (insightTriggeredRef.current[lastUploadId]) return
     if (uploadInsights[lastUploadId]) return
-    fetchSavedInsight(lastUploadId)
-  }, [lastUploadId, lastStatus, uploadInsights, fetchSavedInsight])
+
+    insightTriggeredRef.current[lastUploadId] = true
+    generateInsight(lastUploadId)
+  }, [lastStatus, lastUploadId, uploadInsights, generateInsight])
 
   // ── Detection Output refs and state ──
   const outputVideoRef = useRef(null)

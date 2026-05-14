@@ -219,6 +219,29 @@ async def _run_ai_insight_loop():
             print(f"⚠️  AI insight loop error: {e}")
 
 
+async def emit_analysis_complete(data: dict):
+    """
+    Emit a SINGLE 'analysis_complete' event after a video finishes processing.
+
+    Called exactly once from ai_results.receive_ai_results().
+
+    The frontend listens for this to show ONE completion toast,
+    instead of flooding the user with per-violation notifications.
+    """
+    payload = {
+        "video_id":         data.get("video_id"),
+        "compliance_rate":  data.get("compliance_rate"),
+        "alerts_created":   data.get("alerts_created", 0),
+        "total_violations": data.get("total_violations", 0),
+        "unique_violations": data.get("unique_violations", 0),
+        "zone":             data.get("zone"),
+        "timestamp":        datetime.utcnow().isoformat(),
+    }
+
+    await sio.emit("analysis_complete", payload)
+    print(f"📡 Emitted analysis_complete | compliance={payload['compliance_rate']}% | zone={payload['zone']}")
+
+
 async def emit_ai_insight(insight: dict):
     """
     Manually emit an AI insight to all connected clients.

@@ -9,9 +9,40 @@
 from database import alerts_collection, db
 from datetime import datetime, timedelta
 from bson import ObjectId
+import hashlib, json
 
 # Default — overridden at runtime by the value saved in Settings
 COOLDOWN_SECONDS = 60
+
+# ── Notification dedup ───────────────────────────────────────
+# Prevents emitting the exact same notification twice within 30s.
+_last_notification_hashes: dict[str, dict] = {}
+NOTIFICATION_DEDUP_SECONDS = 30
+
+
+def _compute_notification_hash(alert_data: dict) -> str:
+    """Deterministic hash of the notification-significant fields."""
+    core = {
+        "worker_id":      alert_data.get("worker_id"),
+        "zone":           alert_data.get("zone"),
+        "violation_type": alert_data.get("violation_type"),
+        "severity":       alert_data.get("severity"),
+        "source":         alert_data.get("source"),
+    }
+    raw = json.dumps(core, sort_keys=True, default=str)
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+async def _is_duplicate_notification(alert_hash: str) -> bool:
+    """Returns True if the same notification was sent within N seconds."""
+    now = datetime.utcnow()
+    prev = _last_notification_hashes.get(alert_hash)
+    if prev:
+        elapsed = (now - prev["time"]).total_seconds()
+        if elapsed < NOTIFICATION_DEDUP_SECONDS:
+            return True
+    _last_notification_hashes[alert_hash] = {"time": now}
+    return False
 
 
 async def _get_cooldown_seconds() -> int:
@@ -85,12 +116,17 @@ async def create_alert(alert_data: dict) -> dict | None:
     result = await alerts_collection.insert_one(doc)
     doc["_id"] = result.inserted_id
 
-    # ── Phase 6: Emit via Socket.IO ───────────────────────────
-    try:
-        from socket_server import emit_new_alert
-        await emit_new_alert(doc)
-    except Exception as e:
-        print(f"⚠️  Socket emit failed (alert still saved): {e}")
+    # ── Notification dedup check ─────────────────────────────
+    notif_hash = _compute_notification_hash(doc)
+    if await _is_duplicate_notification(notif_hash):
+        print(f"⏭️  Suppressed duplicate socket emit: worker={worker_id} type={violation_type}")
+    else:
+        # ── Emit via Socket.IO ───────────────────────────────
+        try:
+            from socket_server import emit_new_alert
+            await emit_new_alert(doc)
+        except Exception as e:
+            print(f"⚠️  Socket emit failed (alert still saved): {e}")
 
     # ── Phase 8: Send email for all violations ─────────────────
     print(f"📧 create_alert: severity={severity} | violation={violation_type} | zone={zone}")

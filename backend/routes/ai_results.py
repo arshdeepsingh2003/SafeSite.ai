@@ -1,9 +1,6 @@
 # ============================================================
-# SafeSite AI — AI Results Route  (Phase 5 updated)
+# SafeSite AI — AI Results Route  (v2 — dedup + state lock)
 # File: backend/routes/ai_results.py
-#
-# Phase 5 update: now uses the proper alert_service with
-# cooldown logic instead of inline duplicate checks.
 # ============================================================
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -17,6 +14,20 @@ router = APIRouter(prefix="/ai", tags=["AI Detection"])
 
 AI_SERVICE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../ai-service"))
 
+# ── Processing state lock ────────────────────────────────────
+# Prevents duplicate processing of the same video results.
+_processing_videos: set[str] = set()
+
+# ── Dedup: track last notification per video ─────────────────
+# Hash-based dedup so we never emit the same notification twice.
+_last_notification: dict[str, dict] = {}
+
+
+def _make_notification_hash(video_id: str, notification_type: str, data: dict) -> str:
+    """Create a deterministic hash for deduplication."""
+    raw = f"{video_id}:{notification_type}:{data.get('compliance_rate', '')}:{data.get('alerts_created', '')}"
+    return str(hash(raw))
+
 
 # ── POST /ai/results/{video_id} ──────────────────────────────
 # Called by detect.py after it finishes analyzing a video
@@ -25,12 +36,19 @@ async def receive_ai_results(video_id: str, results: dict):
     """
     Receive analysis results from the AI service (detect.py).
 
-    This does 3 things:
-      1. Updates the video document → status: "completed"
-      2. Saves the full result JSON to the video document
-      3. Creates Alert documents for each unique violation
-         (using the alert_service cooldown so no duplicates)
+    Consolidated behaviour:
+      1. State lock + idempotency check — skip if already completed
+      2. Saves results to the video document (status → completed)
+      3. Creates ONE alert per unique (worker_id, violation_type)
+         instead of one per violation event
+      4. Emits a single "analysis_complete" socket event
+      5. Deduplicates via notification hash
     """
+    # ── Idempotency / state lock ──────────────────────────────
+    if video_id in _processing_videos:
+        print(f"⏭️  Skipping duplicate receive_ai_results for {video_id} (already processing)")
+        return {"message": "Already processing results", "video_id": video_id}
+
     try:
         oid = ObjectId(video_id)
     except Exception:
@@ -40,70 +58,116 @@ async def receive_ai_results(video_id: str, results: dict):
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    # 1. Update video to completed
-    # Keep important fields: workers, violations, frame_detections, output_filename, etc.
-    # We don't strip frame_detections anymore - it's normalized and needed for canvas overlay
-    stored_results = results
-    
-    # Build annotated video URL if we have the filename
-    # The video is saved to uploads/annotated/ which is served at /uploads/annotated/
-    annotated_video_url = None
-    output_filename = results.get("output_filename")
-    if output_filename:
-        annotated_video_url = f"/uploads/annotated/{output_filename}"
-    
-    await db["videos"].update_one(
-        {"_id": oid},
-        {"$set": {
-            "status": "completed",
-            "analysis_result": stored_results,
-            "annotated_video_url": annotated_video_url,
-            "output_filename": output_filename,
-            "analyzed_at": datetime.utcnow(),
-        }}
-    )
-
-    # 2. Create alerts for each violation using the proper service
-    #    The alert_service handles cooldown logic automatically.
-    violations    = results.get("violations", [])
-    zone          = results.get("zone", "Zone A")
-    alerts_created = 0
-
-    print(f"📥 Received {len(violations)} violation(s) from AI analysis")
-    for v in violations:
-        vtype = v.get("violation", "")
-        severity = v.get("severity", "high" if vtype == "no_helmet_and_no_vest" else "medium")
-        print(f"   → violation={vtype} severity={severity} worker={v.get('worker_id')}")
-        if severity not in ("medium", "high"):
-            continue  # Skip "safe" detections
-
-        alert_data = {
-            "video_id":       video_id,
-            "worker_id":      v.get("worker_id"),
-            "zone":           zone,
-            "camera":         "Camera 1",
-            "violation_type": v.get("violation", "unknown"),
-            "severity":       severity,
-            "has_helmet":     v.get("has_helmet", False),
-            "has_vest":       v.get("has_vest", False),
-            "frame_number":   v.get("frame"),
-            "timestamp_sec":  v.get("timestamp_sec"),
-            "bbox":           v.get("bbox"),
-            "source":         "uploaded_video",
+    # If already completed, skip entirely
+    if video.get("status") == "completed":
+        print(f"⏭️  Video {video_id} already completed — skipping duplicate results")
+        return {
+            "message": "Already completed",
+            "video_id": video_id,
+            "compliance_rate": results.get("summary", {}).get("compliance_rate"),
         }
 
-        created = await create_alert(alert_data)
-        if created:
-            alerts_created += 1
+    _processing_videos.add(video_id)
 
-    print(f"✅ Video {video_id}: completed | Alerts created: {alerts_created}")
+    try:
+        # ── 1. Save results ───────────────────────────────────
+        stored_results = results
 
-    return {
-        "message":        "Results saved successfully",
-        "video_id":        video_id,
-        "alerts_created":  alerts_created,
-        "compliance_rate": results.get("summary", {}).get("compliance_rate"),
-    }
+        annotated_video_url = None
+        output_filename = results.get("output_filename")
+        if output_filename:
+            annotated_video_url = f"/uploads/annotated/{output_filename}"
+
+        await db["videos"].update_one(
+            {"_id": oid},
+            {"$set": {
+                "status": "completed",
+                "analysis_result": stored_results,
+                "annotated_video_url": annotated_video_url,
+                "output_filename": output_filename,
+                "analyzed_at": datetime.utcnow(),
+            }}
+        )
+
+        # ── 2. Consolidated alerts (ONE per unique violation) ─
+        violations = results.get("violations", [])
+        zone = results.get("zone", "Zone A")
+        summary = results.get("summary", {})
+        compliance_rate = summary.get("compliance_rate", 0)
+
+        # Dedup key: only one alert per (worker_id, violation_type)
+        seen_violations: set[tuple] = set()
+        alerts_created = 0
+
+        print(f"📥 Received {len(violations)} violation event(s) — consolidating into unique alerts")
+
+        for v in violations:
+            worker_id = v.get("worker_id")
+            vtype = v.get("violation", "")
+            severity = v.get("severity", "high" if vtype == "no_helmet_and_no_vest" else "medium")
+
+            if severity not in ("medium", "high"):
+                continue
+
+            dedup_key = (worker_id, vtype, zone)
+            if dedup_key in seen_violations:
+                continue
+            seen_violations.add(dedup_key)
+
+            alert_data = {
+                "video_id":       video_id,
+                "worker_id":      worker_id,
+                "zone":           zone,
+                "camera":         "Camera 1",
+                "violation_type": vtype,
+                "severity":       severity,
+                "has_helmet":     v.get("has_helmet", False),
+                "has_vest":       v.get("has_vest", False),
+                "frame_number":   v.get("frame"),
+                "timestamp_sec":  v.get("timestamp_sec"),
+                "bbox":           v.get("bbox"),
+                "source":         "uploaded_video",
+            }
+
+            created = await create_alert(alert_data)
+            if created:
+                alerts_created += 1
+
+        print(f"📊 Video {video_id} | {len(seen_violations)} unique violations → {alerts_created} alerts created")
+
+        # ── 3. Emit a SINGLE "analysis_complete" socket event ─
+        notif_data = {
+            "video_id": video_id,
+            "compliance_rate": compliance_rate,
+            "alerts_created": alerts_created,
+            "total_violations": len(violations),
+            "unique_violations": len(seen_violations),
+            "zone": zone,
+        }
+
+        notif_hash = _make_notification_hash(video_id, "analysis_complete", notif_data)
+        prev = _last_notification.get(video_id, {})
+
+        # Only emit if this notification is different from the last one
+        if prev.get("hash") != notif_hash:
+            from socket_server import emit_analysis_complete
+            await emit_analysis_complete(notif_data)
+            _last_notification[video_id] = {"hash": notif_hash, "time": datetime.utcnow()}
+            print(f"📡 Emitted analysis_complete for {video_id}")
+        else:
+            print(f"⏭️  Duplicate analysis_complete suppressed for {video_id}")
+
+        print(f"✅ Video {video_id}: completed | {alerts_created} alerts")
+
+        return {
+            "message":          "Results saved successfully",
+            "video_id":         video_id,
+            "alerts_created":   alerts_created,
+            "compliance_rate":  compliance_rate,
+        }
+
+    finally:
+        _processing_videos.discard(video_id)
 
 
 # ── POST /ai/analyze/{video_id} ─────────────────────────────

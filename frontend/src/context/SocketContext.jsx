@@ -169,14 +169,22 @@ export function SocketProvider({ children }) {
     if (soundEnabled) playSuccess()
   }, [refreshCount, soundEnabled])
 
+  // ── Handle analysis_complete ─────────────────────────────
+  const handleAnalysisComplete = useCallback((data) => {
+    console.log('📊 analysis_complete received:', data)
+    const rate = data.compliance_rate ?? '?'
+    toast.success(`Analysis complete! Compliance rate: ${rate}%`)
+  }, [])
+
   // ── Connect / disconnect with login state ─────────────────
   useEffect(() => {
     if (isLoggedIn) {
       socket.connect()
-      socket.on('connect',        () => setIsConnected(true))
-      socket.on('disconnect',     () => setIsConnected(false))
-      socket.on('new_alert',      handleNewAlert)
-      socket.on('alert_resolved', handleAlertResolved)
+      socket.on('connect',            () => setIsConnected(true))
+      socket.on('disconnect',         () => setIsConnected(false))
+      socket.on('new_alert',          handleNewAlert)
+      socket.on('alert_resolved',     handleAlertResolved)
+      socket.on('analysis_complete',  handleAnalysisComplete)
       socket.on('connect', () => socket.emit('join_room', { room: 'all' }))
     } else {
       socket.disconnect()
@@ -186,10 +194,11 @@ export function SocketProvider({ children }) {
     return () => {
       socket.off('connect')
       socket.off('disconnect')
-      socket.off('new_alert',      handleNewAlert)
-      socket.off('alert_resolved', handleAlertResolved)
+      socket.off('new_alert',          handleNewAlert)
+      socket.off('alert_resolved',     handleAlertResolved)
+      socket.off('analysis_complete',  handleAnalysisComplete)
     }
-  }, [isLoggedIn, handleNewAlert, handleAlertResolved])
+  }, [isLoggedIn, handleNewAlert, handleAlertResolved, handleAnalysisComplete])
 
   return (
     <SocketContext.Provider value={{ isConnected, socket, lastAlert }}>
