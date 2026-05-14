@@ -24,7 +24,7 @@ from routes.llm         import router as llm_router
 from routes.dashboard   import router as dashboard_router
 from routes.analytics   import router as analytics_router   # ← Phase 11
 from routes.reports     import router as reports_router     # ← Phase 12
-from routes.proxy            import router as proxy_router            # HLS proxy
+from routes.proxy            import router as proxy_router, close_client as close_proxy_client  # HLS proxy
 from routes.upload_insights  import router as upload_insights_router   # Upload AI insights
 from socket_server      import sio, emit_system_status, start_insight_loop
 
@@ -58,6 +58,7 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await close_db()
+    await close_proxy_client()
 
 async def _heartbeat():
     while True:
