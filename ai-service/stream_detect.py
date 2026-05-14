@@ -17,6 +17,7 @@ from detect import (
     process_frame,
     reset_worker_tracking,
     FRAME_SAMPLE_RATE,
+    INFERENCE_SIZE,
     OUTPUT_DIR,
 )
 
@@ -168,7 +169,7 @@ def main():
             continue
 
         try:
-            result = process_frame(model, frame, frame_count)
+            result = process_frame(model, frame, frame_count, INFERENCE_SIZE)
         except Exception as e:
             print(f"Frame processing error at frame {frame_count}: {e}")
             continue

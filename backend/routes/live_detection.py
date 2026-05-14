@@ -2,253 +2,77 @@ from fastapi import APIRouter, HTTPException
 from database import db
 from datetime import datetime
 from services.alert_service import create_alert
-import os, uuid, asyncio, urllib.parse, time, math
+import os, sys, uuid, asyncio, urllib.parse, time, math
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 import cv2
 
-router = APIRouter(prefix="/ai", tags=["AI Live Detection"])
-
+# Use detect.py's proper detection pipeline instead of duplicating broken logic
 AI_SERVICE_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../ai-service")
 )
+sys.path.insert(0, AI_SERVICE_DIR)
+
+from detect import load_model as _load_detect_model, process_frame, reset_worker_tracking
+from utils.violation_detector import get_ppe_class_indices
+
+router = APIRouter(prefix="/ai", tags=["AI Live Detection"])
+
 BACKEND_URL = "http://localhost:8000"
-# Use ONNX model if available (faster CPU inference), fallback to PyTorch
-MODEL_PATH_ONNX = os.path.join(AI_SERVICE_DIR, "model/yolov8n.onnx")
-MODEL_PATH_PT = os.path.join(AI_SERVICE_DIR, "model/yolov8n.pt")
-MODEL_PATH = MODEL_PATH_ONNX if os.path.exists(MODEL_PATH_ONNX) else MODEL_PATH_PT
+MODEL_PATH = os.path.join(AI_SERVICE_DIR, "model/ppe_model.pt")
+INFERENCE_SIZE = 416
+CONF_THRESHOLD = 0.15
 
 _executor = ThreadPoolExecutor(max_workers=2)
-
 _model = None
-_model_is_onnx = False
 _model_lock = asyncio.Lock()
-
 _active_sessions: dict[str, dict] = {}
-
-PERSON_KEYWORDS = ["person"]
-HELMET_KEYWORDS = ["helmet", "hardhat", "hat", "helm"]
-VEST_KEYWORDS = ["vest"]
-NO_HELMET_KEYWORDS = ["nohat", "no_hat", "no-helmet", "nohelmet"]
-NO_VEST_KEYWORDS = ["novest", "no_vest", "no-vest", "novest"]
-CONF_THRESHOLD = 0.15
+_live_frame_counter = 0
 
 
 def _get_model():
-    global _model, _model_is_onnx
+    global _model
     if _model is None:
-        abs_path = os.path.abspath(MODEL_PATH)
-        print(f"Loading model: {abs_path}")
-
-        if abs_path.endswith('.onnx'):
-            try:
-                import onnxruntime as ort
-                providers = ['OpenVINOExecutionProvider', 'CPUExecutionProvider']
-                available = [p for p in providers if p in ort.get_available_providers()]
-                if not available:
-                    available = ['CPUExecutionProvider']
-                _model = ort.InferenceSession(abs_path, providers=available)
-                _model_is_onnx = True
-                print(f"ONNX model loaded. Providers: {available}")
-                print(f"Input: {_model.get_inputs()[0].name} shape={_model.get_inputs()[0].shape}")
-            except Exception as e:
-                print(f"ONNX load failed: {e}, falling back to PyTorch")
-                _model = None
-
-        if _model is None:
-            from ultralytics import YOLO
-            pt_path = MODEL_PATH_PT if not abs_path.endswith('.onnx') else abs_path.replace('.onnx', '.pt')
-            if not os.path.exists(pt_path):
-                pt_path = os.path.join(AI_SERVICE_DIR, "model/yolov8n.pt")
-            print(f"Loading PyTorch model: {pt_path}")
-            _model = YOLO(pt_path)
-            _model_is_onnx = False
-            print(f"Model loaded. Classes: {_model.names}")
+        if not os.path.exists(MODEL_PATH):
+            print(f"ERROR: PPE model not found at {MODEL_PATH}")
+            fallback = os.path.join(AI_SERVICE_DIR, "model/yolov8n.pt")
+            if os.path.exists(fallback):
+                print(f"Falling back to {fallback}")
+                _model = _load_detect_model(fallback)
+            return _model
+        print(f"Loading PPE model: {MODEL_PATH}")
+        _model = _load_detect_model(MODEL_PATH)
     return _model
 
 
-def _categorize(class_id: int, class_name: str):
-    name = class_name.lower()
-    cid = class_id
-    is_person = any(k in name for k in PERSON_KEYWORDS)
-    is_helmet = any(k in name for k in HELMET_KEYWORDS)
-    is_vest = any(k in name for k in VEST_KEYWORDS)
-    is_no_helmet = any(k in name for k in NO_HELMET_KEYWORDS)
-    is_no_vest = any(k in name for k in NO_VEST_KEYWORDS)
-    return is_person, is_helmet, is_vest, is_no_helmet, is_no_vest
-
-
-def _boxes_overlap(a, b, iou_thresh=0.05):
-    x1 = max(a[0], b[0])
-    y1 = max(a[1], b[1])
-    x2 = min(a[2], b[2])
-    y2 = min(a[3], b[3])
-    if x2 <= x1 or y2 <= y1:
-        return False
-    inter = (x2 - x1) * (y2 - y1)
-    area_a = (a[2] - a[0]) * (a[3] - a[1])
-    area_b = (b[2] - b[0]) * (b[3] - b[1])
-    union = area_a + area_b - inter
-    if union <= 0:
-        return False
-    return (inter / union) > iou_thresh
-
-
-def _normalize_bbox(bbox, width, height):
-    if not bbox or len(bbox) < 4:
-        return bbox
-    return [bbox[0] / width, bbox[1] / height, bbox[2] / width, bbox[3] / height]
-
-
-def _letterbox_resize(frame, target_size=416):
-    h, w = frame.shape[:2]
-    scale = target_size / max(h, w)
-    new_w = int(w * scale)
-    new_h = int(h * scale)
-    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-    dw = target_size - new_w
-    dh = target_size - new_h
-    top, bottom = dh // 2, dh - dh // 2
-    left, right = dw // 2, dw - dw // 2
-    padded = cv2.copyMakeBorder(resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
-    return padded, scale, (left, top)
-
-
-def _onnx_inference(sess, frame, conf_threshold):
-    input_name = sess.get_inputs()[0].name
-    blob = frame.transpose(2, 0, 1)[np.newaxis, ...].astype(np.float32) / 255.0
-    outputs = sess.run(None, {input_name: blob})[0]
-    outputs = outputs[0].transpose()
-    boxes, scores, class_ids = [], [], []
-    for pred in outputs:
-        score = float(pred[4:].max())
-        if score < conf_threshold:
-            continue
-        class_id = int(pred[4:].argmax())
-        cx, cy, w, h = float(pred[0]), float(pred[1]), float(pred[2]), float(pred[3])
-        x1 = cx - w / 2
-        y1 = cy - h / 2
-        x2 = cx + w / 2
-        y2 = cy + h / 2
-        boxes.append([x1, y1, x2, y2])
-        scores.append(score)
-        class_ids.append(class_id)
-    indices = cv2.dnn.NMSBoxes(boxes, scores, conf_threshold, 0.5)
-    results = []
-    if len(indices) > 0:
-        indices = indices.flatten()
-        for i in indices:
-            results.append((class_ids[i], scores[i], boxes[i]))
-    return results
-
-
 def _detect_on_frame(frame, model, width, height):
-    """Run YOLO on a single frame, return detections + summary."""
-    global _model_is_onnx
+    """Run YOLO on a single frame using detect.py's v3 pipeline."""
+    global _live_frame_counter
+    _live_frame_counter += 1
 
-    if _model_is_onnx:
-        padded, scale, pad = _letterbox_resize(frame, 416)
-        raw = _onnx_inference(model, padded, CONF_THRESHOLD)
-        results_data = []
-        for cid, conf, bbox_px in raw:
-            x1 = (bbox_px[0] - pad[0]) / max(scale, 1e-6)
-            y1 = (bbox_px[1] - pad[1]) / max(scale, 1e-6)
-            x2 = (bbox_px[2] - pad[0]) / max(scale, 1e-6)
-            y2 = (bbox_px[3] - pad[1]) / max(scale, 1e-6)
-            x1 = max(0, min(width, x1))
-            y1 = max(0, min(height, y1))
-            x2 = max(0, min(width, x2))
-            y2 = max(0, min(height, y2))
-            name = {0: 'person', 1: 'bicycle', 2: 'car'}.get(cid, "unknown")
-            results_data.append((cid, conf, [x1, y1, x2, y2], name))
-    else:
-        results_obj = model(frame, conf=CONF_THRESHOLD, verbose=False, device="cpu")
-        results_data = []
-        for box in results_obj[0].boxes:
-            cid = int(box.cls[0])
-            conf = float(box.conf[0])
-            bbox_px = box.xyxy[0].tolist()
-            name = model.names.get(cid, "")
-            results_data.append((cid, conf, bbox_px, name))
+    result = process_frame(model, frame, _live_frame_counter, INFERENCE_SIZE)
 
-    persons = []
-    helmets = []
-    vests = []
-    no_helmets = []
-    no_vests = []
-
-    for cid, conf, bbox_px, name in results_data:
-        is_p, is_h, is_v, is_nh, is_nv = _categorize(cid, name)
-
-        if is_nh:
-            no_helmets.append(bbox_px)
-        elif is_nv:
-            no_vests.append(bbox_px)
-        elif is_p:
-            persons.append((bbox_px, conf))
-        elif is_h:
-            helmets.append(bbox_px)
-        elif is_v:
-            vests.append(bbox_px)
-
+    raw_workers = result.get("detections", [])
     detections = []
-    for pid, (pbox, pconf) in enumerate(persons, 1):
-        has_helmet = any(_boxes_overlap(pbox, hb) for hb in helmets)
-        has_vest = any(_boxes_overlap(pbox, vb) for vb in vests)
-        no_helmet_violation = any(_boxes_overlap(pbox, nb) for nb in no_helmets)
-        no_vest_violation = any(_boxes_overlap(pbox, nb) for nb in no_vests)
-
-        effective_no_helmet = (not has_helmet) or no_helmet_violation
-        effective_no_vest = (not has_vest) or no_vest_violation
-
-        if effective_no_helmet and effective_no_vest:
-            label = "No Helmet & No Vest"
-            color = "#ef4444"
-            vio = "no_helmet_and_no_vest"
-            sev = "high"
-        elif effective_no_helmet:
-            label = "No Helmet"
-            color = "#f97316"
-            vio = "no_helmet"
-            sev = "medium"
-        elif effective_no_vest:
-            label = "No Vest"
-            color = "#eab308"
-            vio = "no_vest"
-            sev = "medium"
-        else:
-            label = "Compliant"
-            color = "#22c55e"
-            vio = "none"
-            sev = "safe"
-
+    for w in raw_workers:
+        bbox = w.get("bbox")
+        norm_bbox = (
+            [bbox[0]/width, bbox[1]/height, bbox[2]/width, bbox[3]/height]
+            if bbox and len(bbox) == 4 else bbox
+        )
         detections.append({
-            "worker_id": pid,
-            "has_helmet": has_helmet,
-            "has_vest": has_vest,
-            "violation": vio,
-            "severity": sev,
-            "label": label,
-            "bbox": _normalize_bbox(pbox, width, height),
-            "color_hex": color,
-            "confidence": round(pconf, 3),
+            "worker_id": w.get("worker_id", 0),
+            "has_helmet": w.get("has_helmet", False),
+            "has_vest": w.get("has_vest", False),
+            "violation": w.get("violation", "none"),
+            "severity": w.get("severity", "safe"),
+            "label": w.get("label", "Unknown"),
+            "bbox": norm_bbox,
+            "color_hex": w.get("color_hex", "#22c55e"),
+            "confidence": w.get("confidence", 0.5),
         })
 
-    total = len(detections)
-    compliant = sum(1 for d in detections if d["violation"] == "none")
-    violations = total - compliant
-    no_h = sum(1 for d in detections if d["violation"] == "no_helmet")
-    no_v = sum(1 for d in detections if d["violation"] == "no_vest")
-    no_b = sum(1 for d in detections if d["violation"] == "no_helmet_and_no_vest")
-
-    summary = {
-        "total_workers": total,
-        "compliant": compliant,
-        "violations": violations,
-        "no_helmet": no_h,
-        "no_vest": no_v,
-        "no_helmet_and_no_vest": no_b,
-    }
+    summary = result.get("summary", {})
 
     return detections, summary
 
@@ -261,6 +85,7 @@ async def _run_stream_session(session_id: str, stream_url: str, zone: str, camer
 
     try:
         model = await loop.run_in_executor(_executor, _get_model)
+        await loop.run_in_executor(_executor, reset_worker_tracking)
     except Exception as e:
         print(f"Model load failed: {e}")
         if session_id in _active_sessions:
@@ -268,6 +93,7 @@ async def _run_stream_session(session_id: str, stream_url: str, zone: str, camer
             _active_sessions[session_id]["running"] = False
         return
 
+    _live_frame_counter = 0
     print(f"Opening stream: {stream_url}")
     cap = await loop.run_in_executor(
         _executor, lambda: _try_open_stream(stream_url)

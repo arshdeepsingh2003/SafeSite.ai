@@ -6,8 +6,10 @@
 #   uvicorn main:socket_app --reload --port 8000
 # ============================================================
 
-import asyncio, socketio
+import asyncio, os, sys, socketio
 from fastapi import FastAPI
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import connect_db, close_db
@@ -25,7 +27,6 @@ from routes.reports     import router as reports_router     # ← Phase 12
 from routes.proxy            import router as proxy_router            # HLS proxy
 from routes.upload_insights  import router as upload_insights_router   # Upload AI insights
 from socket_server      import sio, emit_system_status, start_insight_loop
-import os
 
 app = FastAPI(
     title="SafeSite AI — Construction Safety API",

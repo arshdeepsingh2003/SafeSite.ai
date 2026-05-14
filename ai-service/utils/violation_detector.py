@@ -380,6 +380,213 @@ def associate_ppe_with_workers_v2(
     return workers
 
 
+# ── Region-Based PPE Matching (v3) ──────────────────────────
+
+def get_head_region(person_box, expand_ratio=0.1):
+    """
+    Extract head region from person bounding box.
+    Head region = top 25% of box height, slightly widened for side-angle views.
+    """
+    x1, y1, x2, y2 = person_box
+    height = y2 - y1
+    width = x2 - x1
+    head_bottom = y1 + height * 0.25
+    expand = width * expand_ratio
+    return [x1 - expand, y1, x2 + expand, head_bottom]
+
+
+def get_torso_region(person_box):
+    """
+    Extract torso region from person bounding box.
+    Torso region = middle 50% of box height (20%-70%).
+    Covers the chest/torso area where a safety vest would be worn.
+    Flexible for sitting/crouching postures.
+    """
+    x1, y1, x2, y2 = person_box
+    height = y2 - y1
+    width = x2 - x1
+    torso_top = y1 + height * 0.2
+    torso_bottom = y1 + height * 0.7
+    expand = width * 0.05
+    return [x1 - expand, torso_top, x2 + expand, torso_bottom]
+
+
+def get_bbox_center(bbox):
+    """Return (cx, cy) center point of a bounding box."""
+    return ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
+
+
+def point_in_box(px, py, box):
+    """Check if point (px, py) is inside box [x1, y1, x2, y2]."""
+    x1, y1, x2, y2 = box
+    tol = 1e-6
+    return (x1 - tol) <= px <= (x2 + tol) and (y1 - tol) <= py <= (y2 + tol)
+
+
+def boxes_iou(box1, box2):
+    """
+    Calculate Intersection over Union between two bounding boxes.
+    box format: [x1, y1, x2, y2]
+    """
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+
+    if x2 <= x1 or y2 <= y1:
+        return 0.0
+
+    intersection = (x2 - x1) * (y2 - y1)
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    union = area1 + area2 - intersection
+
+    if union <= 0:
+        return 0.0
+
+    return intersection / union
+
+
+def ppe_matches_person_region(ppe_box, region_box, iou_threshold=0.05):
+    """
+    Check if a PPE detection matches a person's body region.
+    Uses TWO criteria for robustness:
+    1. Centroid check: PPE box center is inside the region
+    2. IoU check: PPE box overlaps with the region
+
+    Two criteria ensures matching works for:
+    - Small PPE boxes (hat) whose centroid falls in head region
+    - Partial occlusions where only part of PPE is visible
+    - Side/crouching angles where alignment is imperfect
+    """
+    cx, cy = get_bbox_center(ppe_box)
+
+    # Criterion 1: centroid inside region
+    if point_in_box(cx, cy, region_box):
+        return True
+
+    # Criterion 2: IoU overlap
+    iou = boxes_iou(ppe_box, region_box)
+    if iou >= iou_threshold:
+        return True
+
+    return False
+
+
+def associate_ppe_with_workers_v3(
+    person_boxes, helmet_boxes, no_helmet_boxes,
+    vest_boxes, no_vest_boxes, frame_number=None,
+    has_negative_classes=False, has_ppe_capability=True,
+):
+    """
+    Person-centric PPE matching with region-based validation.
+
+    For each detected person:
+    1. Compute head region (top 25% of person box)
+    2. Compute torso region (middle 50% of person box)
+    3. Match helmet: centroid inside head region OR IoU overlap
+    4. Match vest: centroid inside torso region OR IoU overlap
+
+    Logic per person:
+    - If model has negative classes (nohat/novest):
+        no_helmet in head_region  -> has_helmet = False
+        helmet in head_region     -> has_helmet = True
+        no detection              -> has_helmet = True  (default compliant)
+    - If model has only positive classes (hat/vest):
+        helmet in head_region     -> has_helmet = True
+        no detection              -> has_helmet = False
+    - If model has NO PPE classes (COCO):
+        has_helmet = False  (model can't detect PPE)
+
+    Same logic applies for vest with torso_region.
+
+    This ensures:
+    - Helmet only  -> "No Vest"
+    - Vest only    -> "No Helmet"
+    - Both         -> "Compliant"
+    - None         -> "No Helmet & No Vest"
+    """
+    workers = []
+
+    if frame_number:
+        print(f"   Frame {frame_number}: {len(person_boxes)} persons detected")
+        if has_ppe_capability:
+            print(f"      Helmets: {len(helmet_boxes)} pos + {len(no_helmet_boxes)} neg | "
+                  f"Vests: {len(vest_boxes)} pos + {len(no_vest_boxes)} neg")
+        else:
+            print(f"      WARNING: No PPE classes in model - all persons classified as violations")
+
+    for i, person_box in enumerate(person_boxes):
+        head_region = get_head_region(person_box)
+        torso_region = get_torso_region(person_box)
+
+        # ── Determine helmet status ──────────────────────────
+        if not has_ppe_capability:
+            has_helmet = False  # Model cannot detect helmets
+        else:
+            no_helmet_in_head = any(
+                ppe_matches_person_region(b, head_region) for b in no_helmet_boxes
+            )
+            helmet_in_head = any(
+                ppe_matches_person_region(b, head_region) for b in helmet_boxes
+            )
+
+            if no_helmet_in_head:
+                has_helmet = False
+            elif helmet_in_head:
+                has_helmet = True
+            elif has_negative_classes:
+                # Model has explicit negative classes but neither fired
+                # Assume compliant to avoid false positives from missed detections
+                has_helmet = True
+            else:
+                # Only positive classes exist and none detected
+                has_helmet = False
+
+        # ── Determine vest status ────────────────────────────
+        if not has_ppe_capability:
+            has_vest = False  # Model cannot detect vests
+        else:
+            no_vest_in_torso = any(
+                ppe_matches_person_region(b, torso_region) for b in no_vest_boxes
+            )
+            vest_in_torso = any(
+                ppe_matches_person_region(b, torso_region) for b in vest_boxes
+            )
+
+            if no_vest_in_torso:
+                has_vest = False
+            elif vest_in_torso:
+                has_vest = True
+            elif has_negative_classes:
+                has_vest = True
+            else:
+                has_vest = False
+
+        violation_info = get_violation(has_helmet, has_vest)
+
+        if frame_number:
+            h = 'Y' if has_helmet else 'N'
+            v = 'Y' if has_vest else 'N'
+            print(f"      Person {i+1}: Helmet={h} Vest={v} -> {violation_info['label']}")
+
+        workers.append({
+            "worker_id": i + 1,
+            "has_helmet": has_helmet,
+            "has_vest": has_vest,
+            "violation": violation_info["violation"],
+            "severity": violation_info["severity"],
+            "label": violation_info["label"],
+            "bbox": [int(x) for x in person_box],
+            "color": violation_info["color"],
+            "color_hex": violation_info["color_hex"],
+            "head_region": [int(x) for x in head_region],
+            "torso_region": [int(x) for x in torso_region],
+        })
+
+    return workers
+
+
 def summarize_detections(workers: list) -> dict:
     """
     Count up the results from a list of worker detections.

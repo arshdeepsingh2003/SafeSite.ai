@@ -15,8 +15,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from utils.violation_detector import (
-    associate_ppe_with_workers,
-    associate_ppe_with_workers_v2,
+    associate_ppe_with_workers_v3,
     summarize_detections,
     get_violation,
     PERSON_CLASS_ID,
@@ -316,62 +315,74 @@ def load_model(model_path: str):
             return _global_model
 
         abs_path = os.path.abspath(model_path)
-        is_onnx = abs_path.endswith('.onnx')
 
-        if is_onnx:
+        # If model file doesn't exist, try alternate paths
+        if not os.path.exists(abs_path):
+            alt_path = abs_path.replace('.onnx', '.pt').replace('.pt', '_model.pt')
+            if os.path.exists(alt_path):
+                abs_path = alt_path
+                print(f"Using alternate path: {abs_path}")
+            else:
+                print(f"ERROR: Model not found at {abs_path}")
+                print(f"Available models in {os.path.dirname(abs_path)}:")
+                model_dir = os.path.dirname(abs_path)
+                if os.path.exists(model_dir):
+                    for f in os.listdir(model_dir):
+                        if f.endswith(('.pt', '.onnx')):
+                            print(f"  - {f}")
+                raise FileNotFoundError(f"Model not found: {model_path}")
+
+        # Load with ONNX Runtime for .onnx files
+        if abs_path.endswith('.onnx'):
             print(f"Loading ONNX model: {abs_path}")
             try:
                 import onnxruntime as ort
-                providers = ['OpenVINOExecutionProvider', 'CPUExecutionProvider']
-                available = [p for p in providers if p in ort.get_available_providers()]
-                if not available:
-                    available = ['CPUExecutionProvider']
-                print(f"ONNX Runtime providers: {available}")
-                sess = ort.InferenceSession(abs_path, providers=available)
+                providers = ['CPUExecutionProvider']
+                print(f"ONNX Runtime providers: {ort.get_available_providers()}")
+                sess = ort.InferenceSession(abs_path, providers=providers)
                 _global_model = sess
                 _global_model_is_onnx = True
-
                 input_name = sess.get_inputs()[0].name
                 input_shape = sess.get_inputs()[0].shape
                 print(f"ONNX input: {input_name} shape={input_shape}")
-
                 MODEL_PPE_CLASSES = {
-                    'helmet': set(),
-                    'no_helmet': set(),
-                    'vest': set(),
-                    'no_vest': set(),
+                    'helmet': set(), 'no_helmet': set(),
+                    'vest': set(), 'no_vest': set(),
                     'person': {0}
                 }
-                print("Using YOLOv8n COCO model with person class only.")
-                print("PPE detection relies on positive/negative class logic.")
+                print("Using COCO model. No PPE classes available.")
+                print("Switch to ppe_model.pt for PPE detection.")
+                return _global_model
             except Exception as e:
                 print(f"ONNX load failed: {e}")
-                print("Falling back to PyTorch YOLO...")
-                _global_model = None
-                is_onnx = False
+                print("onnxruntime not available or model not compatible.")
+                print("Use .pt model file instead.")
+                raise
 
-        if not is_onnx or _global_model is None:
-            from ultralytics import YOLO
-            print(f"Loading PyTorch model: {abs_path}")
-            if not os.path.exists(model_path):
-                alt = model_path.replace('.onnx', '.pt')
-                if os.path.exists(alt):
-                    model_path = alt
-                    abs_path = os.path.abspath(alt)
-                    print(f"Trying alternate path: {abs_path}")
+        # PyTorch model (.pt)
+        from ultralytics import YOLO
+        print(f"Loading PyTorch model: {abs_path}")
+        model = YOLO(abs_path)
+        print(f"Model loaded. Classes ({len(model.names)}):")
+        for cid, cname in model.names.items():
+            print(f"  {cid}: {cname}")
+        _global_model = model
+        _global_model_is_onnx = False
 
-            model = YOLO(model_path)
-            print(f"Model loaded. Classes: {model.names}")
-            _global_model = model
-            _global_model_is_onnx = False
+        MODEL_PPE_CLASSES = get_ppe_class_indices(model.names)
+        if MODEL_PPE_CLASSES['helmet'] or MODEL_PPE_CLASSES['no_helmet']:
+            print("✅ Helmet classes detected")
+        if MODEL_PPE_CLASSES['vest'] or MODEL_PPE_CLASSES['no_vest']:
+            print("✅ Vest classes detected")
+        if MODEL_PPE_CLASSES['person']:
+            print(f"✅ Person class: {MODEL_PPE_CLASSES['person']}")
 
-            MODEL_PPE_CLASSES = get_ppe_class_indices(model.names)
-            has_helmet = len(MODEL_PPE_CLASSES['helmet']) > 0 or len(MODEL_PPE_CLASSES['no_helmet']) > 0
-            has_vest = len(MODEL_PPE_CLASSES['vest']) > 0 or len(MODEL_PPE_CLASSES['no_vest']) > 0
-            if not has_helmet or not has_vest:
-                print(f"WARNING: Model may not have PPE classes. Using COCO person class (ID 0).")
-            else:
-                print("PPE classes detected - model is suitable for safety detection")
+        has_ppe = any(len(v) > 0 for k, v in MODEL_PPE_CLASSES.items() if k != 'person')
+        if not has_ppe:
+            print("⚠️  WARNING: Model has NO PPE classes (helmet/vest).")
+            print("   Install ppe_model.pt for proper PPE detection.")
+        else:
+            print("Model is suitable for PPE safety detection.")
 
         return _global_model
 
@@ -494,7 +505,7 @@ def is_no_vest(class_id, class_name=None):
     return False
 
 
-def process_frame(model, frame: np.ndarray, frame_number: int, inference_size: int) -> dict:
+def process_frame(model, frame: np.ndarray, frame_number: int, inference_size: int = 416) -> dict:
     h_orig, w_orig = frame.shape[:2]
 
     padded, scale, pad = _letterbox_resize(frame, inference_size)
@@ -539,13 +550,19 @@ def process_frame(model, frame: np.ndarray, frame_number: int, inference_size: i
 
     has_no_helmet_class = MODEL_PPE_CLASSES and len(MODEL_PPE_CLASSES.get('no_helmet', set())) > 0
     has_no_vest_class = MODEL_PPE_CLASSES and len(MODEL_PPE_CLASSES.get('no_vest', set())) > 0
+    has_helmet_class = MODEL_PPE_CLASSES and len(MODEL_PPE_CLASSES.get('helmet', set())) > 0
+    has_vest_class = MODEL_PPE_CLASSES and len(MODEL_PPE_CLASSES.get('vest', set())) > 0
+    has_ppe_capability = has_helmet_class or has_no_helmet_class or has_vest_class or has_no_vest_class
 
-    if has_no_helmet_class or has_no_vest_class:
-        workers = associate_ppe_with_workers_v2(
-            person_boxes, helmet_boxes, no_helmet_boxes, vest_boxes, no_vest_boxes, frame_number
-        )
-    else:
-        workers = associate_ppe_with_workers(person_boxes, helmet_boxes, vest_boxes, frame_number)
+    if not has_ppe_capability and frame_number == 1:
+        print(f"   WARNING: Model has no PPE classes. Install ppe_model.pt for proper detection.")
+
+    workers = associate_ppe_with_workers_v3(
+        person_boxes, helmet_boxes, no_helmet_boxes, vest_boxes, no_vest_boxes,
+        frame_number,
+        has_negative_classes=has_no_helmet_class or has_no_vest_class,
+        has_ppe_capability=has_ppe_capability,
+    )
 
     worker_matches = _match_workers_to_tracks(person_boxes, frame_number)
 
@@ -569,7 +586,7 @@ def process_frame(model, frame: np.ndarray, frame_number: int, inference_size: i
 
     clean_workers = []
     for w in workers:
-        cw = {k: v for k, v in w.items() if k != "color"}
+        cw = {k: v for k, v in w.items() if k not in ("color", "head_region", "torso_region")}
         clean_workers.append(cw)
 
     return {

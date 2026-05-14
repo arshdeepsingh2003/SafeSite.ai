@@ -26,7 +26,8 @@
 import asyncio
 import socketio
 from datetime import datetime
-from utils.aggregate_detections import DetectionAggregator
+
+from analytics.aggregate_detections import DetectionAggregator
 from services.groq_service import analyze_detections
 
 # ── Create the Socket.IO server ───────────────────────────────
