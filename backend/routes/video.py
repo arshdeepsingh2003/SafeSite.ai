@@ -5,6 +5,7 @@ from services.auth_service import get_current_user
 from models.video import VideoInDB, VideoResponse, VideoStatus, VideoType
 from bson import ObjectId
 from datetime import datetime
+from time_utils import istnow
 from typing import Optional
 import os, shutil, uuid, aiofiles
 
@@ -83,7 +84,7 @@ async def upload_video(
 
     # Save metadata to MongoDB
     video_dict = video_in_db.model_dump(exclude_none=True)
-    video_dict["uploaded_at"] = datetime.utcnow()
+    video_dict["uploaded_at"] = istnow()
 
     result = await db["videos"].insert_one(video_dict)
     video_id = str(result.inserted_id)
@@ -132,7 +133,7 @@ async def register_stream(
 
     # Save to MongoDB
     stream_dict = video_in_db.model_dump(exclude_none=True)
-    stream_dict["uploaded_at"] = datetime.utcnow()
+    stream_dict["uploaded_at"] = istnow()
 
     result = await db["videos"].insert_one(stream_dict)
 

@@ -11,6 +11,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from time_utils import istnow
 import os
 
 load_dotenv()
@@ -22,7 +23,7 @@ SAMPLE_REPORTS = [
     {
         "name":       "Daily Safety Report",
         "type":       "daily",
-        "date_range": datetime.utcnow().strftime("%B %d, %Y"),
+        "date_range": istnow().strftime("%B %d, %Y"),
         "site":       "Main Construction Site",
         "zone":       "all",
         "stats": {
@@ -48,7 +49,7 @@ SAMPLE_REPORTS = [
     {
         "name":       "Weekly Safety Report",
         "type":       "weekly",
-        "date_range": f"{(datetime.utcnow()-timedelta(days=7)).strftime('%b %d')} - {datetime.utcnow().strftime('%b %d, %Y')}",
+        "date_range": f"{(istnow()-timedelta(days=7)).strftime('%b %d')} - {istnow().strftime('%b %d, %Y')}",
         "site":       "Main Construction Site",
         "zone":       "all",
         "stats": {
@@ -74,7 +75,7 @@ SAMPLE_REPORTS = [
     {
         "name":       "Zone A Safety Report",
         "type":       "zone",
-        "date_range": f"{(datetime.utcnow()-timedelta(days=7)).strftime('%b %d')} - {datetime.utcnow().strftime('%b %d, %Y')}",
+        "date_range": f"{(istnow()-timedelta(days=7)).strftime('%b %d')} - {istnow().strftime('%b %d, %Y')}",
         "site":       "Main Construction Site",
         "zone":       "Zone A",
         "stats": {
@@ -95,7 +96,7 @@ SAMPLE_REPORTS = [
     {
         "name":       "Monthly Safety Report",
         "type":       "monthly",
-        "date_range": f"{(datetime.utcnow()-timedelta(days=30)).strftime('%b %d')} - {datetime.utcnow().strftime('%b %d, %Y')}",
+        "date_range": f"{(istnow()-timedelta(days=30)).strftime('%b %d')} - {istnow().strftime('%b %d, %Y')}",
         "site":       "all",
         "zone":       "all",
         "stats": {
@@ -123,7 +124,7 @@ SAMPLE_REPORTS = [
     {
         "name":       "Custom Report",
         "type":       "custom",
-        "date_range": f"{(datetime.utcnow()-timedelta(days=3)).strftime('%b %d')} - {datetime.utcnow().strftime('%b %d, %Y')}",
+        "date_range": f"{(istnow()-timedelta(days=3)).strftime('%b %d')} - {istnow().strftime('%b %d, %Y')}",
         "site":       "Main Construction Site",
         "zone":       "Zone B, Zone C",
         "stats": {
@@ -155,7 +156,7 @@ async def seed():
     deleted = await reports_col.delete_many({"_seeded": True})
     print(f"🗑  Removed {deleted.deleted_count} old seed records")
 
-    now = datetime.utcnow()
+    now = istnow()
     docs = []
     for i, r in enumerate(SAMPLE_REPORTS):
         doc = {

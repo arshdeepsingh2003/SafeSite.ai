@@ -15,11 +15,9 @@ This will:
 
 import cv2
 import os
-import sys
-import argparse
 import numpy as np
-from dotenv import load_dotenv
 from datetime import datetime
+from time_utils import istnow
 
 load_dotenv()
 
@@ -299,7 +297,7 @@ def debug_frame(model, frame, frame_number, inference_size):
         cv2.putText(overlay, line, (10, y), font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
     cv2.addWeighted(overlay, 0.7, debug_img, 0.3, 0, debug_img)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = istnow().strftime("%Y%m%d_%H%M%S")
     debug_path = os.path.join(DEBUG_DIR, f"debug_frame_{frame_number}_{timestamp}.jpg")
     cv2.imwrite(debug_path, debug_img)
     print(f"  Debug frame saved: {debug_path}")

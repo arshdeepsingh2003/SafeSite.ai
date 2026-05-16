@@ -9,6 +9,7 @@ import threading
 import numpy as np
 from datetime import datetime
 from dotenv import load_dotenv
+from time_utils import istnow
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -776,7 +777,7 @@ def process_video(video_path: str, video_id: str = None, zone: str = "Zone A") -
         "output_path": output_path,
         "output_filename": output_filename,
         "zone": zone,
-        "analyzed_at": datetime.utcnow().isoformat(),
+        "analyzed_at": istnow().isoformat(),
         "processing_time_sec": round(elapsed, 2),
         "avg_inference_time_ms": round(avg_infer, 1),
         "processing_fps": round(processed_fps, 1),

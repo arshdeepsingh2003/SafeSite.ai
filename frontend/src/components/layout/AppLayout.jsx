@@ -20,17 +20,21 @@ export default function AppLayout() {
   const pageTitle        = PAGE_TITLES[location.pathname] || 'SafeSite AI'
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <div style={{ height: '100vh', display: 'flex', background: 'var(--bg-primary)' }}>
 
-      {/* ── Sidebar ── */}
+      {/* ── Sidebar (fixed) ── */}
       <Sidebar />
 
       {/* ── Main content area ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        marginLeft: '208px', overflow: 'hidden', minWidth: 0,
+      }}>
 
-        {/* ── Top header bar ── */}
+        {/* ── Top header bar (sticky) ── */}
         <header style={{
           height:           '60px',
+          position:         'sticky', top: 0, zIndex: 100,
           background:       'var(--bg-secondary)',
           borderBottom:     '1px solid var(--border)',
           display:          'flex',
@@ -139,8 +143,8 @@ export default function AppLayout() {
           </div>
         </header>
 
-        {/* ── Page content ── */}
-        <main style={{ flex: 1, overflow: 'auto', padding: '24px' }} className="page-enter">
+        {/* ── Page content (scrollable) ── */}
+        <main style={{ flex: 1, overflowY: 'auto', padding: '24px' }} className="page-enter">
           <Outlet />
         </main>
 

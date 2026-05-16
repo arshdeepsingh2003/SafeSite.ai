@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 from enum import Enum
+from time_utils import istnow
  
  
 # Roles 
@@ -19,7 +20,7 @@ class UserInDB(BaseModel):
     hashed_password: str
     role: UserRole = UserRole.user
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=istnow)
  
  
 # What we receive when registering a new user 

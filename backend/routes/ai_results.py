@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from database import db
 from bson import ObjectId
 from datetime import datetime
+from time_utils import istnow
 from services.alert_service import create_alert
 import subprocess, os, sys
 
@@ -85,7 +86,7 @@ async def receive_ai_results(video_id: str, results: dict):
                 "analysis_result": stored_results,
                 "annotated_video_url": annotated_video_url,
                 "output_filename": output_filename,
-                "analyzed_at": datetime.utcnow(),
+                "analyzed_at": istnow(),
             }}
         )
 
@@ -152,7 +153,7 @@ async def receive_ai_results(video_id: str, results: dict):
         if prev.get("hash") != notif_hash:
             from socket_server import emit_analysis_complete
             await emit_analysis_complete(notif_data)
-            _last_notification[video_id] = {"hash": notif_hash, "time": datetime.utcnow()}
+            _last_notification[video_id] = {"hash": notif_hash, "time": istnow()}
             print(f"📡 Emitted analysis_complete for {video_id}")
         else:
             print(f"⏭️  Duplicate analysis_complete suppressed for {video_id}")
@@ -201,7 +202,7 @@ async def trigger_analysis(video_id: str, background_tasks: BackgroundTasks):
     # Mark as processing immediately
     await db["videos"].update_one(
         {"_id": oid},
-        {"$set": {"status": "processing", "processing_started_at": datetime.utcnow()}}
+        {"$set": {"status": "processing", "processing_started_at": istnow()}}
     )
 
     # Run detect.py in background

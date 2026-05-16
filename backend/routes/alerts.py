@@ -56,6 +56,7 @@ async def list_alerts(
     severity:  str = Query(default="all", description="Filter by severity: high, medium"),
     status:    str = Query(default="all", description="Filter by status: new, acknowledged, resolved"),
     violation: str = Query(default="all", description="Filter by violation type"),
+    date:      str = Query(default="",    description="Filter by date (YYYY-MM-DD)"),
     limit:     int = Query(default=20,    ge=1, le=100),
     skip:      int = Query(default=0,     ge=0),
     current_user: dict = Depends(get_current_user),
@@ -72,9 +73,9 @@ async def list_alerts(
     alerts = await get_alerts(
         zone=zone, severity=severity,
         status=status, violation=violation,
-        limit=limit, skip=skip,
+        date=date, limit=limit, skip=skip,
     )
-    total = await get_alert_count(zone=zone, severity=severity, status=status)
+    total = await get_alert_count(zone=zone, severity=severity, status=status, date=date)
 
     return {
         "alerts": alerts,

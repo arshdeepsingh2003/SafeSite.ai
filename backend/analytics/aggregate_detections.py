@@ -1,6 +1,7 @@
 import time
 from collections import deque
 from datetime import datetime
+from time_utils import istnow
 
 
 class DetectionAggregator:
@@ -196,6 +197,6 @@ class DetectionAggregator:
             "trend_direction": trend.get("direction", "stable"),
             "trend_description": trend.get("description", ""),
             "zone_observations": zones,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": istnow().isoformat(),
         }
         return payload

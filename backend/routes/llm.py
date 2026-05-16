@@ -10,6 +10,7 @@ from services.groq_service import (
 from services.auth_service import get_current_user
 from database import alerts_collection, db
 from datetime import datetime, timedelta
+from time_utils import istnow
 
 router = APIRouter(prefix="/llm", tags=["LLM / AI Insights"])
 
@@ -122,7 +123,7 @@ async def daily_report(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     else:
-        report_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        report_date = istnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
     day_start = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
     day_end   = day_start + timedelta(days=1)
@@ -207,8 +208,8 @@ async def weekly_report(current_user: dict = Depends(get_current_user)):
     Generate a 7-day summary report.
     Aggregates data for the last 7 days and sends to Groq.
     """
-    week_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
-    week_end   = datetime.utcnow()
+    week_start = istnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
+    week_end   = istnow()
 
     pipeline = [
         {"$match": {"created_at": {"$gte": week_start, "$lt": week_end}}},

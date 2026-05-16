@@ -9,6 +9,7 @@ from pathlib import Path
 import os
 
 from database import users_collection
+from time_utils import istnow
 
 # Explicitly load .env from backend directory
 env_path = Path(__file__).parent.parent / '.env'
@@ -50,9 +51,9 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = istnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = istnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -115,7 +116,7 @@ async def register(data: RegisterRequest):
         "hashed_password": hash_password(data.password),
         "role": data.role,
         "is_active": True,
-        "created_at": datetime.utcnow(),
+        "created_at": istnow(),
     }
 
     result = await users_collection.insert_one(user_doc)

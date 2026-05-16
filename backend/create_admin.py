@@ -2,8 +2,8 @@
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
-from datetime import datetime, timezone
 from dotenv import load_dotenv
+from time_utils import istnow
 import os
 
 load_dotenv()
@@ -40,7 +40,7 @@ async def create_admin():
         "hashed_password": pwd_context.hash(admin_password),
         "role": "admin",
         "is_active": True,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": istnow()
     }
 
     result = await users.insert_one(admin_doc)

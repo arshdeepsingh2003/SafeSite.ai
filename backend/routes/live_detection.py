@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from database import db
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from services.alert_service import create_alert
 import os, sys, uuid, asyncio, urllib.parse, time, math
 import numpy as np
@@ -15,6 +15,10 @@ sys.path.insert(0, AI_SERVICE_DIR)
 
 from detect import load_model as _load_detect_model, process_frame, reset_worker_tracking
 from utils.violation_detector import get_ppe_class_indices
+
+IST = timezone(timedelta(hours=5, minutes=30))
+def istnow():
+    return datetime.now(IST)
 
 router = APIRouter(prefix="/ai", tags=["AI Live Detection"])
 
@@ -154,7 +158,7 @@ async def _run_stream_session(session_id: str, stream_url: str, zone: str, camer
             "summary": summary,
             "zone": zone,
             "camera": camera,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": istnow().isoformat(),
         }
 
         try:
@@ -191,7 +195,7 @@ async def _run_stream_session(session_id: str, stream_url: str, zone: str, camer
     cap.release()
     if session_id in _active_sessions:
         _active_sessions[session_id]["running"] = False
-        _active_sessions[session_id]["stopped_at"] = datetime.utcnow().isoformat()
+        _active_sessions[session_id]["stopped_at"] = istnow().isoformat()
     print(f"Session {session_id[:8]} ended. Processed {processed} frames.")
 
 
@@ -258,7 +262,7 @@ async def stream_started(data: dict):
         "event": "started",
         "camera": data.get("camera", "Camera 1"),
         "zone": data.get("zone", "Zone A"),
-        "timestamp": datetime.utcnow(),
+        "timestamp": istnow(),
     })
     return {"message": "Stream started event recorded"}
 
@@ -269,7 +273,7 @@ async def stream_stopped(data: dict):
         "event": "stopped",
         "camera": data.get("camera", "Camera 1"),
         "zone": data.get("zone", "Zone A"),
-        "timestamp": datetime.utcnow(),
+        "timestamp": istnow(),
     })
     return {"message": "Stream stopped event recorded"}
 
@@ -295,7 +299,7 @@ async def start_stream_analysis(data: dict):
         "proxied_url": proxied,
         "zone": zone,
         "camera": camera,
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": istnow().isoformat(),
         "error": None,
         "last_detection_at": None,
     }
@@ -365,7 +369,7 @@ async def inject_test_detections():
         "summary": {"total_workers": 3, "compliant": 0, "violations": 3,
                     "no_helmet": 1, "no_vest": 1, "no_helmet_and_no_vest": 1},
         "zone": "Zone A", "camera": "Camera 1",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": istnow().isoformat(),
     }
     try:
         from socket_server import sio

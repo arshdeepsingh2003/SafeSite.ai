@@ -10,6 +10,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
 from datetime import datetime
+from time_utils import istnow
 from database import db
 from services.groq_service import generate_upload_insight
 from services.auth_service import get_current_user
@@ -157,7 +158,7 @@ async def generate_video_insight(
         {"_id": oid},
         {"$set": {
             "ai_insight_report": report,
-            "ai_insight_generated_at": datetime.utcnow(),
+            "ai_insight_generated_at": istnow(),
         }}
     )
 

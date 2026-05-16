@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from database import db, alerts_collection
 from services.auth_service import get_current_user
 from datetime import datetime, timedelta
+from time_utils import istnow
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -24,7 +25,7 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     All data needed to render the Dashboard page in one call.
     Reduces frontend API calls from 5 → 1.
     """
-    today   = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today   = istnow().replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
 
     # ── Stat cards ───────────────────────────────────────────

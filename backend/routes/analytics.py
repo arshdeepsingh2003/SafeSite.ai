@@ -13,6 +13,7 @@
 # ============================================================
 
 from fastapi import APIRouter, Depends, Query
+from time_utils import istnow
 from database import db, alerts_collection
 from services.auth_service import get_current_user
 from datetime import datetime, timedelta
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 def _parse_range(range_str: str):
     """Convert range string to (start, end) datetimes."""
-    now   = datetime.utcnow()
+    now   = istnow()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if range_str == "today":
         return today, now
@@ -285,7 +286,7 @@ async def get_compliance_trend(
     """
     Compliance rate per week — for the rising area chart.
     """
-    now    = datetime.utcnow()
+    now    = istnow()
     result = []
 
     # Determine number of weeks from range

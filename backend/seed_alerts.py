@@ -2,6 +2,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from time_utils import istnow
 import random, os
 
 load_dotenv()
@@ -29,7 +30,7 @@ async def seed():
     print(f"Existing alerts in DB: {existing}")
 
     # Create 25 sample alerts spread across today
-    now    = datetime.utcnow()
+    now    = istnow()
     created = 0
 
     for i in range(25):

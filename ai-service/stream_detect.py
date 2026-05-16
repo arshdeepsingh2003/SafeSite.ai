@@ -9,6 +9,7 @@ import requests
 import numpy as np
 from datetime import datetime
 from dotenv import load_dotenv
+from time_utils import istnow
 
 sys.path.insert(0, os.path.dirname(__file__))
 from ultralytics import YOLO
@@ -198,7 +199,7 @@ def main():
             },
             "zone": args.zone,
             "camera": args.camera,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": istnow().isoformat(),
         }
 
         ok = send_detections(payload, BACKEND_URL)
@@ -284,7 +285,7 @@ def _run_test_mode(backend_url, zone, camera, stop_flag):
             },
             "zone": zone,
             "camera": camera,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": istnow().isoformat(),
         }
 
         ok = send_detections(payload, backend_url)

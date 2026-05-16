@@ -3,6 +3,7 @@ import json
 import traceback
 from datetime import datetime
 from pathlib import Path
+from time_utils import istnow
 from dotenv import load_dotenv
 
 # Use absolute path so .env is found regardless of working directory
@@ -134,7 +135,7 @@ Rules:
             "compliance_percentage": result.get("compliance_percentage", f"{rate:.1f}%"),
             "generated_by":         "groq",
             "model":                GROQ_MODEL,
-            "generated_at":         datetime.utcnow().isoformat(),
+            "generated_at":         istnow().isoformat(),
         }
 
     except Exception as e:
@@ -157,7 +158,7 @@ async def generate_daily_report(alerts_data: dict) -> dict:
     try:
         client = _get_client()
 
-        date       = alerts_data.get("date", datetime.utcnow().strftime("%Y-%m-%d"))
+        date       = alerts_data.get("date", istnow().strftime("%Y-%m-%d"))
         total      = alerts_data.get("total_alerts", 0)
         no_helmet  = alerts_data.get("no_helmet", 0)
         no_vest    = alerts_data.get("no_vest", 0)
@@ -226,7 +227,7 @@ RULES:
             "date":         date,
             "generated_by": "groq",
             "model":        GROQ_MODEL,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": istnow().isoformat(),
             "raw_data":     alerts_data,
         }
 
@@ -367,7 +368,7 @@ RULES:
             **result,
             "generated_by": "groq",
             "model": GROQ_MODEL,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": istnow().isoformat(),
             "report_type": "uploaded_video_audit",
         }
 
@@ -458,14 +459,14 @@ def _fallback_analysis(data: dict) -> dict:
         "compliance_percentage": f"{rate:.1f}%",
         "generated_by":         "rule_based",
         "model":                "none",
-        "generated_at":         datetime.utcnow().isoformat(),
+        "generated_at":         istnow().isoformat(),
     }
 
 
 def _fallback_report(data: dict) -> dict:
     rate  = data.get("compliance_rate", 0)
     total = data.get("total_alerts", 0)
-    date  = data.get("date", datetime.utcnow().strftime("%Y-%m-%d"))
+    date  = data.get("date", istnow().strftime("%Y-%m-%d"))
     no_h  = data.get("no_helmet", 0)
     no_v  = data.get("no_vest", 0)
     both  = data.get("no_helmet_and_no_vest", 0)
@@ -505,7 +506,7 @@ def _fallback_report(data: dict) -> dict:
         "date":              date,
         "generated_by":      "rule_based",
         "model":             "none",
-        "generated_at":      datetime.utcnow().isoformat(),
+        "generated_at":      istnow().isoformat(),
         "raw_data":          data,
     }
 
@@ -599,7 +600,7 @@ def _fallback_upload_insight(data: dict) -> dict:
         ),
         "generated_by": "rule_based",
         "model": "none",
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": istnow().isoformat(),
         "report_type": "uploaded_video_audit",
     }
 

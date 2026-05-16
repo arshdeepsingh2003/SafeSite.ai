@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+from time_utils import istnow
 
 
 class AlertSeverity(str, Enum):
@@ -47,7 +48,7 @@ class AlertInDB(BaseModel):
     source:         str            = "uploaded_video"  # or "live_stream"
     status:         AlertStatus    = AlertStatus.new
     resolved:       bool           = False
-    created_at:     datetime       = Field(default_factory=datetime.utcnow)
+    created_at:     datetime       = Field(default_factory=istnow)
     resolved_at:    Optional[datetime] = None
 
 

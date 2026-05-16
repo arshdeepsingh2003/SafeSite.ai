@@ -26,6 +26,7 @@
 import asyncio
 import socketio
 from datetime import datetime
+from time_utils import istnow
 
 from analytics.aggregate_detections import DetectionAggregator
 from services.groq_service import analyze_detections
@@ -69,7 +70,7 @@ async def connect(sid, environ, auth):
     await sio.emit("connected", {
         "message": "Connected to SafeSite AI real-time server",
         "sid": sid,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": istnow().isoformat(),
     }, to=sid)
 
 
@@ -102,7 +103,7 @@ async def join_room(sid, data):
 async def ping(sid, data):
     """Frontend can ping to verify connection is alive."""
     await sio.emit("pong", {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": istnow().isoformat(),
         "connected_clients": len(connected_clients),
     }, to=sid)
 
@@ -131,7 +132,7 @@ async def emit_new_alert(alert: dict):
         "has_helmet":     alert.get("has_helmet", False),
         "has_vest":       alert.get("has_vest", False),
         "source":         alert.get("source", "uploaded_video"),
-        "timestamp":      datetime.utcnow().isoformat(),
+        "timestamp":      istnow().isoformat(),
     }
 
     # Emit to ALL connected clients
@@ -153,7 +154,7 @@ async def emit_alert_resolved(alert_id: str, zone: str = None):
     payload = {
         "alert_id":  alert_id,
         "zone":      zone,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": istnow().isoformat(),
     }
     await sio.emit("alert_resolved", payload)
     print(f"📡 Emitted alert_resolved: {alert_id}")
@@ -166,7 +167,7 @@ async def emit_stats_update(stats: dict):
     """
     await sio.emit("stats_update", {
         **stats,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": istnow().isoformat(),
     })
     print(f"📡 Emitted stats_update")
 
@@ -178,7 +179,7 @@ async def emit_system_status(status: dict):
     """
     await sio.emit("system_status", {
         **status,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": istnow().isoformat(),
     })
 
 
@@ -235,7 +236,7 @@ async def emit_analysis_complete(data: dict):
         "total_violations": data.get("total_violations", 0),
         "unique_violations": data.get("unique_violations", 0),
         "zone":             data.get("zone"),
-        "timestamp":        datetime.utcnow().isoformat(),
+        "timestamp":        istnow().isoformat(),
     }
 
     await sio.emit("analysis_complete", payload)

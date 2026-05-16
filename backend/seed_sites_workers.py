@@ -11,6 +11,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from time_utils import istnow
 import random, os
 
 load_dotenv()
@@ -82,7 +83,7 @@ async def seed():
     if existing_sites > 0:
         print(f"⚠️  {existing_sites} sites already exist. Delete them first if you want to reseed.")
     else:
-        now = datetime.utcnow()
+        now = istnow()
         for i, s in enumerate(SITES):
             s["start_date"]  = "Jan 15, 2024"
             s["end_date"]    = "Dec 31, 2024"
@@ -97,7 +98,7 @@ async def seed():
     if existing_workers > 0:
         print(f"⚠️  {existing_workers} workers already exist. Skipping workers seed.")
     else:
-        now = datetime.utcnow()
+        now = istnow()
         worker_docs = []
         for i, w in enumerate(WORKERS):
             worker_docs.append({

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 from enum import Enum
+from time_utils import istnow
 
 
 class VideoStatus(str, Enum):
@@ -35,7 +36,7 @@ class VideoInDB(BaseModel):
     type: VideoType = VideoType.uploaded
     status: VideoStatus = VideoStatus.uploaded
     uploaded_by: Optional[str] = None
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(default_factory=istnow)
     analysis_result: Optional[dict] = None  # Filled by AI service in Phase 4
 
 

@@ -12,6 +12,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from time_utils import istnow
 import random, os
 
 load_dotenv()
@@ -46,7 +47,7 @@ async def seed():
     print(f"🗑  Removed {deleted.deleted_count} old seed records")
 
     docs     = []
-    now      = datetime.utcnow()
+    now      = istnow()
     days     = 30
     per_day  = random.randint(18, 45)   # violations per day
 

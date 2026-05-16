@@ -18,6 +18,7 @@ from services.auth_service import get_current_user
 from services.alert_service import create_alert
 from socket_server import sio, emit_new_alert, emit_stats_update
 from datetime import datetime
+from time_utils import istnow
 import random
 
 router = APIRouter(prefix="/test", tags=["Testing"])
@@ -108,7 +109,7 @@ async def socket_status(current_user: dict = Depends(get_current_user)):
     return {
         "connected_clients": len(connected_clients),
         "client_ids":        list(connected_clients),
-        "timestamp":         datetime.utcnow().isoformat(),
+        "timestamp":         istnow().isoformat(),
     }
 
 

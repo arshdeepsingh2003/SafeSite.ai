@@ -5,6 +5,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from dotenv import load_dotenv
+from time_utils import istnow
 
 load_dotenv()
 
@@ -39,14 +40,14 @@ def _build_html_email(alert: dict) -> str:
     zone      = alert.get("zone", "Unknown Zone")
     camera    = alert.get("camera", "Camera 1")
     worker_id = alert.get("worker_id", "N/A")
-    timestamp = alert.get("created_at", datetime.utcnow())
+    timestamp = alert.get("created_at", istnow())
     has_helmet = alert.get("has_helmet", False)
     has_vest   = alert.get("has_vest", False)
     source     = alert.get("source", "uploaded_video").replace("_", " ").title()
 
     # Format timestamp nicely
     if isinstance(timestamp, datetime):
-        ts_str = timestamp.strftime("%B %d, %Y at %I:%M:%S %p UTC")
+        ts_str = timestamp.strftime("%B %d, %Y at %I:%M:%S %p IST")
     else:
         ts_str = str(timestamp)
 
@@ -164,7 +165,7 @@ def _build_html_email(alert: dict) -> str:
       This is an automated alert from SafeSite AI.<br>
       To manage your alert preferences, visit
       <a href="http://localhost:5173/settings" style="color:#6366f1;text-decoration:none;">Settings</a>.<br><br>
-      © {datetime.utcnow().year} SafeSite AI — Construction Site Safety Monitoring
+      © {istnow().year} SafeSite AI — Construction Site Safety Monitoring
     </div>
 
   </div>
@@ -268,7 +269,7 @@ async def send_test_email(recipient: str) -> dict:
         "has_helmet":     False,
         "has_vest":       False,
         "source":         "test",
-        "created_at":     datetime.utcnow(),
+        "created_at":     istnow(),
     }
 
     # Temporarily override recipient

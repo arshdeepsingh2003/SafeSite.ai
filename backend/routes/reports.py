@@ -20,6 +20,7 @@ from services.auth_service import get_current_user
 from services.groq_service import generate_daily_report
 from bson import ObjectId
 from datetime import datetime, timedelta
+from time_utils import istnow
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -75,7 +76,7 @@ async def _range_stats(start: datetime, end: datetime, zone: str = "all") -> dic
 @router.get("/summary")
 async def reports_summary(current_user: dict = Depends(get_current_user)):
     """Stat cards shown at the top of the Reports page."""
-    today  = datetime.utcnow()
+    today  = istnow()
     week_start = today - timedelta(days=7)
     prev_week  = week_start - timedelta(days=7)
 
@@ -125,7 +126,7 @@ async def generate_report(
       3. Save the full report to the "reports" collection
       4. Return the saved report ID + content
     """
-    now = datetime.utcnow()
+    now = istnow()
 
     # ── Determine date range ──
     if body.type == "daily":

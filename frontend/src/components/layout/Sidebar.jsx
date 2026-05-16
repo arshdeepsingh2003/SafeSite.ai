@@ -1,17 +1,8 @@
-// ============================================================
-// SafeSite AI — Sidebar Navigation  (Phase 5 — live alert badge)
-// File: frontend/src/components/layout/Sidebar.jsx
-// ============================================================
-
-import { NavLink, useNavigate } from 'react-router-dom'
-import { useAuth }         from '../../context/AuthContext'
+import { NavLink } from 'react-router-dom'
 import { useAlertContext } from '../../context/AlertContext'
-import toast from 'react-hot-toast'
 
 export default function Sidebar() {
-  const { user, logout }   = useAuth()
-  const { unreadCount }    = useAlertContext()
-  const navigate           = useNavigate()
+  const { unreadCount } = useAlertContext()
 
   const navItems = [
     { path: '/live-monitoring', icon: '📹', label: 'Live Monitoring'  },
@@ -21,19 +12,13 @@ export default function Sidebar() {
     { path: '/reports',         icon: '📄', label: 'Reports'          },
   ]
 
-  const handleLogout = () => {
-    logout()
-    toast.success('Logged out successfully')
-    navigate('/login')
-  }
-
   return (
     <aside style={{
-      width: '208px', minHeight: '100vh',
+      width: '208px', height: '100vh',
+      position: 'fixed', top: 0, left: 0, zIndex: 200,
       background: 'var(--bg-secondary)',
       borderRight: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
-      flexShrink: 0,
     }}>
 
       {/* ── Logo ── */}
@@ -106,92 +91,6 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* ── Site selector ── */}
-      <div style={{
-        padding: '12px',
-        borderTop: '1px solid var(--border)',
-        borderBottom: '1px solid var(--border)',
-      }}>
-        <div style={{ fontSize: '10px', color: '#8b949e', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Site Selector
-        </div>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '6px',
-          padding: '7px 10px',
-          background: 'var(--bg-primary)',
-          borderRadius: '6px', cursor: 'pointer',
-          border: '1px solid var(--border)',
-        }}>
-          <span style={{ fontSize: '12px' }}>📍</span>
-          <span style={{ fontSize: '12px', color: '#e6edf3', flex: 1 }}>Main Construction Site</span>
-          <span style={{ fontSize: '10px', color: '#8b949e' }}>▼</span>
-        </div>
-      </div>
-
-      {/* ── System status ── */}
-      <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ fontSize: '10px', color: '#8b949e', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          System Status
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '28px', height: '28px',
-            background: 'rgba(34,197,94,0.15)',
-            border: '1px solid rgba(34,197,94,0.3)',
-            borderRadius: '6px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px',
-          }}>🛡️</div>
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>Online</div>
-            <div style={{ fontSize: '10px', color: '#8b949e' }}>All systems operational</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── User profile + logout ── */}
-      <div style={{ padding: '12px' }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '8px',
-          background: 'var(--bg-primary)', borderRadius: '8px',
-          marginBottom: '8px',
-        }}>
-          <div style={{
-            width: '30px', height: '30px',
-            background: 'var(--accent-blue)',
-            borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '14px', flexShrink: 0,
-          }}>👤</div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{
-              fontSize: '12px', fontWeight: '600', color: '#e6edf3',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {user?.name || 'User'}
-            </div>
-            <div style={{ fontSize: '10px', color: '#8b949e' }}>
-              {user?.role === 'admin' ? '🔑 Admin' : '👁 Viewer'}
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            width: '100%', padding: '7px',
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            borderRadius: '6px', color: '#8b949e',
-            fontSize: '12px', cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { e.target.style.borderColor = '#ef4444'; e.target.style.color = '#ef4444' }}
-          onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = '#8b949e' }}
-        >
-          🚪 Sign Out
-        </button>
-      </div>
-
       <style>{`
         @keyframes badgePulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
@@ -199,30 +98,5 @@ export default function Sidebar() {
         }
       `}</style>
     </aside>
-  )
-}
-
-// Inline hover helper — applies hover bg without full CSS class system
-function HoverNavItem({ isActive, children }) {
-  return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
-      }}
-      onMouseEnter={e => {
-        if (!isActive) {
-          e.currentTarget.closest('a').style.background = 'var(--bg-hover)'
-          e.currentTarget.closest('a').style.color = '#e6edf3'
-        }
-      }}
-      onMouseLeave={e => {
-        if (!isActive) {
-          e.currentTarget.closest('a').style.background = 'transparent'
-          e.currentTarget.closest('a').style.color = '#8b949e'
-        }
-      }}
-    >
-      {children}
-    </div>
   )
 }

@@ -8,7 +8,8 @@
 //   - Pagination
 //   - Per-row: acknowledge / resolve / delete actions
 //   - "Mark all as read" button
-//   - Violation trend chart (right panel)
+//   - Alerts summary donut chart
+//   - Violation trend line chart
 //   - Auto-refresh every 15 seconds
 // ============================================================
 
@@ -105,6 +106,7 @@ export default function AlertsPage() {
   const [actionLoading, setActionLoading] = useState(null) // alert id being acted on
 
   // Filters
+  const [filterDate,      setFilterDate]      = useState('')
   const [filterZone,      setFilterZone]      = useState('all')
   const [filterSeverity,  setFilterSeverity]  = useState('all')
   const [filterStatus,    setFilterStatus]    = useState('all')
@@ -122,6 +124,7 @@ export default function AlertsPage() {
         severity:  filterSeverity,
         status:    filterStatus,
         violation: filterViolation,
+        date:      filterDate,
         limit:     LIMIT,
         skip:      (page - 1) * LIMIT,
       })
@@ -137,7 +140,7 @@ export default function AlertsPage() {
     } finally {
       setLoading(false)
     }
-  }, [filterZone, filterSeverity, filterStatus, filterViolation, page])
+  }, [filterZone, filterSeverity, filterStatus, filterViolation, filterDate, page])
 
   // Only poll if user is logged in (token exists)
   const token = localStorage.getItem('safesite_token')
@@ -152,7 +155,7 @@ export default function AlertsPage() {
   }, [fetchAlerts, token])
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [filterZone, filterSeverity, filterStatus, filterViolation])
+  useEffect(() => { setPage(1) }, [filterZone, filterSeverity, filterStatus, filterViolation, filterDate])
 
   // ── Actions ───────────────────────────────────────────────
   async function handleStatusChange(alertId, newStatus) {
@@ -207,8 +210,8 @@ export default function AlertsPage() {
         <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#e6edf3' }}>Alerts</h1>
       </div>
 
-      {/* ── Two-column layout ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px', alignItems: 'start' }}>
+      {/* ── Single-column layout ── */}
+      <div>
 
         {/* ── LEFT: Main content ── */}
         <div>
@@ -220,15 +223,18 @@ export default function AlertsPage() {
             borderRadius: '10px', padding: '12px 16px', flexWrap: 'wrap',
             alignItems: 'center',
           }}>
-            {/* Date (visual only for now) */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '7px 12px', background: 'var(--bg-primary)',
-              border: '1px solid var(--border)', borderRadius: '7px',
-              fontSize: '13px', color: '#e6edf3', cursor: 'pointer',
-            }}>
-              📅 {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </div>
+            {/* Date filter */}
+            <input
+              type="date"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              style={{
+                ...selectStyle,
+                colorScheme: 'dark',
+                textTransform: 'uppercase',
+                fontFamily: 'inherit',
+              }}
+            />
 
             {/* Zone filter */}
             <select
@@ -392,141 +398,96 @@ export default function AlertsPage() {
           </div>
         </div>
 
-        {/* ── RIGHT: Summary panel ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-          {/* Donut chart summary */}
-          <div style={{
-            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-            borderRadius: '12px', padding: '18px',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#e6edf3' }}>Alerts Summary</span>
-              <span style={{ fontSize: '12px', color: '#8b949e' }}>Today</span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <PieChart width={100} height={100}>
-                  <Pie
-                    data={[
-                      { value: summary.no_helmet || 1 },
-                      { value: summary.no_vest || 1 },
-                      { value: summary.no_helmet_and_no_vest || 1 },
-                    ]}
-                    cx={45} cy={45}
-                    innerRadius={28} outerRadius={44}
-                    dataKey="value" paddingAngle={3}
-                  >
-                    <Cell fill="#f97316" />
-                    <Cell fill="#eab308" />
-                    <Cell fill="#a855f7" />
-                  </Pie>
-                </PieChart>
-                <div style={{
-                  position: 'absolute', top: '50%', left: '50%',
-                  transform: 'translate(-50%,-50%)',
-                  textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#e6edf3' }}>{summary.total}</div>
-                  <div style={{ fontSize: '9px', color: '#8b949e' }}>Total</div>
-                </div>
-              </div>
-
-              <div style={{ flex: 1 }}>
-                {[
-                  { label: 'No Helmet', color: '#f97316', count: summary.no_helmet },
-                  { label: 'No Vest',   color: '#eab308', count: summary.no_vest   },
-                  { label: 'No Helmet & No Vest', color: '#a855f7', count: summary.no_helmet_and_no_vest },
-                ].map(item => (
-                  <div key={item.label} style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', marginBottom: '7px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <div style={{ width: '8px', height: '8px', background: item.color, borderRadius: '50%' }} />
-                      <span style={{ fontSize: '11px', color: '#8b949e' }}>{item.label}</span>
-                    </div>
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#e6edf3' }}>
-                      {item.count} ({summary.total > 0 ? Math.round(item.count / summary.total * 100) : 0}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* ── Alerts Summary ── */}
+        <div style={{
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+          borderRadius: '12px', padding: '18px', marginTop: '20px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#e6edf3' }}>Alerts Summary</span>
+            <span style={{ fontSize: '12px', color: '#8b949e' }}>Today</span>
           </div>
 
-          {/* Trend chart */}
-          <div style={{
-            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-            borderRadius: '12px', padding: '18px',
-          }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: '#e6edf3', marginBottom: '14px' }}>
-              Violation Trend (Today)
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <PieChart width={100} height={100}>
+                <Pie
+                  data={[
+                    { value: summary.no_helmet || 1 },
+                    { value: summary.no_vest || 1 },
+                    { value: summary.no_helmet_and_no_vest || 1 },
+                  ]}
+                  cx={45} cy={45}
+                  innerRadius={28} outerRadius={44}
+                  dataKey="value" paddingAngle={3}
+                >
+                  <Cell fill="#f97316" />
+                  <Cell fill="#eab308" />
+                  <Cell fill="#a855f7" />
+                </Pie>
+              </PieChart>
+              <div style={{
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%,-50%)',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: '#e6edf3' }}>{summary.total}</div>
+                <div style={{ fontSize: '9px', color: '#8b949e' }}>Total</div>
+              </div>
             </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <LineChart data={MOCK_TREND}>
-                <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#8b949e' }} axisLine={false} tickLine={false} interval={2} />
-                <YAxis tick={{ fontSize: 9, fill: '#8b949e' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: '#1f2937', border: '1px solid #30363d', borderRadius: '6px', fontSize: '11px' }}
-                  labelStyle={{ color: '#e6edf3' }}
-                />
-                <Line type="monotone" dataKey="helmet" stroke="#f97316" dot={false} strokeWidth={2} name="No Helmet" />
-                <Line type="monotone" dataKey="vest"   stroke="#eab308" dot={false} strokeWidth={2} name="No Vest"   />
-                <Line type="monotone" dataKey="both"   stroke="#a855f7" dot={false} strokeWidth={2} name="Both"      />
-              </LineChart>
-            </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
-              {[['#f97316','No Helmet'],['#eab308','No Vest'],['#a855f7','No Helmet & No Vest']].map(([c,l]) => (
-                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#8b949e' }}>
-                  <div style={{ width: '10px', height: '3px', background: c, borderRadius: '2px' }} />
-                  {l}
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Recent snapshots (visual placeholder) */}
-          <div style={{
-            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-            borderRadius: '12px', padding: '18px',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#e6edf3' }}>Recent Alert Snapshots</span>
-              <span style={{ fontSize: '12px', color: '#3b82f6', cursor: 'pointer' }}>View All</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            <div style={{ flex: 1 }}>
               {[
-                { type: 'No Helmet & No Vest', zone: 'Zone A', color: '#ef4444' },
-                { type: 'No Helmet',           zone: 'Zone B', color: '#f97316' },
-                { type: 'No Vest',             zone: 'Zone A', color: '#eab308' },
-              ].map((s, i) => (
-                <div key={i} style={{
-                  aspectRatio: '4/3',
-                  background: `${s.color}15`,
-                  border: `1px solid ${s.color}30`,
-                  borderRadius: '8px',
-                  display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: '4px',
+                { label: 'No Helmet', color: '#f97316', count: summary.no_helmet },
+                { label: 'No Vest',   color: '#eab308', count: summary.no_vest   },
+                { label: 'No Helmet & No Vest', color: '#a855f7', count: summary.no_helmet_and_no_vest },
+              ].map(item => (
+                <div key={item.label} style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', marginBottom: '7px',
                 }}>
-                  <div style={{ fontSize: '20px' }}>
-                    {VIOLATION_META[Object.keys(VIOLATION_META).find(k => VIOLATION_META[k].label === s.type)]?.icon || '⚠️'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ width: '8px', height: '8px', background: item.color, borderRadius: '50%' }} />
+                    <span style={{ fontSize: '11px', color: '#8b949e' }}>{item.label}</span>
                   </div>
-                  <div style={{ fontSize: '9px', color: s.color, fontWeight: '600', textAlign: 'center', padding: '0 4px' }}>{s.type}</div>
-                  <div style={{ fontSize: '9px', color: '#8b949e' }}>{s.zone}</div>
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#e6edf3' }}>
+                    {item.count} ({summary.total > 0 ? Math.round(item.count / summary.total * 100) : 0}%)
+                  </span>
                 </div>
               ))}
             </div>
-            <button style={{
-              width: '100%', marginTop: '12px', padding: '8px',
-              background: 'transparent', border: '1px solid var(--border)',
-              borderRadius: '7px', color: '#8b949e', fontSize: '12px', cursor: 'pointer',
-            }}>
-              📊 View Full Reports
-            </button>
           </div>
+        </div>
 
+        {/* ── Violation Trend (Today) ── */}
+        <div style={{
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+          borderRadius: '12px', padding: '18px', marginTop: '16px',
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#e6edf3', marginBottom: '14px' }}>
+            Violation Trend (Today)
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={MOCK_TREND}>
+              <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#8b949e' }} axisLine={false} tickLine={false} interval={2} />
+              <YAxis tick={{ fontSize: 9, fill: '#8b949e' }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ background: '#1f2937', border: '1px solid #30363d', borderRadius: '6px', fontSize: '11px' }}
+                labelStyle={{ color: '#e6edf3' }}
+              />
+              <Line type="monotone" dataKey="helmet" stroke="#f97316" dot={false} strokeWidth={2} name="No Helmet" />
+              <Line type="monotone" dataKey="vest"   stroke="#eab308" dot={false} strokeWidth={2} name="No Vest"   />
+              <Line type="monotone" dataKey="both"   stroke="#a855f7" dot={false} strokeWidth={2} name="Both"      />
+            </LineChart>
+          </ResponsiveContainer>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+            {[['#f97316','No Helmet'],['#eab308','No Vest'],['#a855f7','No Helmet & No Vest']].map(([c,l]) => (
+              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#8b949e' }}>
+                <div style={{ width: '10px', height: '3px', background: c, borderRadius: '2px' }} />
+                {l}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

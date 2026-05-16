@@ -9,6 +9,7 @@
 from database import alerts_collection, db
 from datetime import datetime, timedelta
 from bson import ObjectId
+from time_utils import istnow
 import hashlib, json
 
 # Default — overridden at runtime by the value saved in Settings
@@ -35,7 +36,7 @@ def _compute_notification_hash(alert_data: dict) -> str:
 
 async def _is_duplicate_notification(alert_hash: str) -> bool:
     """Returns True if the same notification was sent within N seconds."""
-    now = datetime.utcnow()
+    now = istnow()
     prev = _last_notification_hashes.get(alert_hash)
     if prev:
         elapsed = (now - prev["time"]).total_seconds()
@@ -63,7 +64,7 @@ async def check_cooldown(worker_id: int, zone: str, violation_type: str) -> bool
     Cooldown duration is read live from the Settings collection.
     """
     cooldown = await _get_cooldown_seconds()
-    cutoff = datetime.utcnow() - timedelta(seconds=cooldown)
+    cutoff = istnow() - timedelta(seconds=cooldown)
     existing = await alerts_collection.find_one(
         {
             "worker_id":      worker_id,
@@ -108,7 +109,7 @@ async def create_alert(alert_data: dict) -> dict | None:
         "source":         alert_data.get("source", "uploaded_video"),
         "status":         "new",
         "resolved":       False,
-        "created_at":     datetime.utcnow(),
+        "created_at":     istnow(),
         "resolved_at":    None,
         "email_sent":     False,    # Track if email was sent
     }
@@ -155,6 +156,7 @@ async def get_alerts(
     severity:  str = None,
     status:    str = None,
     violation: str = None,
+    date:      str = None,
     limit:     int = 50,
     skip:      int = 0,
 ) -> list:
@@ -164,6 +166,13 @@ async def get_alerts(
     if severity  and severity  != "all": query["severity"]       = severity
     if status    and status    != "all": query["status"]         = status
     if violation and violation != "all": query["violation_type"] = violation
+    if date:
+        from time_utils import IST
+        day = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=IST)
+        query["created_at"] = {
+            "$gte": day,
+            "$lt":  day + timedelta(days=1),
+        }
 
     cursor = alerts_collection.find(query) \
         .sort("created_at", -1) \
@@ -177,11 +186,15 @@ async def get_alerts(
     return alerts
 
 
-async def get_alert_count(zone=None, severity=None, status=None) -> int:
+async def get_alert_count(zone=None, severity=None, status=None, date=None) -> int:
     query = {}
     if zone     and zone     != "all": query["zone"]     = zone
     if severity and severity != "all": query["severity"] = severity
     if status   and status   != "all": query["status"]   = status
+    if date:
+        from time_utils import IST
+        day = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=IST)
+        query["created_at"] = {"$gte": day, "$lt": day + timedelta(days=1)}
     return await alerts_collection.count_documents(query)
 
 
@@ -189,7 +202,7 @@ async def update_alert_status(alert_id: str, status: str) -> bool:
     update_fields = {"status": status}
     if status == "resolved":
         update_fields["resolved"]    = True
-        update_fields["resolved_at"] = datetime.utcnow()
+        update_fields["resolved_at"] = istnow()
 
     result = await alerts_collection.update_one(
         {"_id": ObjectId(alert_id)},
@@ -214,19 +227,20 @@ async def resolve_all_alerts() -> int:
         {"$set": {
             "status":      "resolved",
             "resolved":    True,
-            "resolved_at": datetime.utcnow(),
+            "resolved_at": istnow(),
         }}
     )
     return result.modified_count
 
 
 async def get_alert_summary() -> dict:
-    """Today's alert counts grouped by violation type, plus zone breakdown."""
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    """Today's unresolved alert counts grouped by violation type, plus zone breakdown."""
+    today_start = istnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    match = {"created_at": {"$gte": today_start}, "status": {"$ne": "resolved"}}
 
     # Violation type counts
     pipeline = [
-        {"$match": {"created_at": {"$gte": today_start}}},
+        {"$match": match},
         {"$group": {"_id": "$violation_type", "count": {"$sum": 1}}}
     ]
     counts = {"total": 0, "no_helmet": 0, "no_vest": 0, "no_helmet_and_no_vest": 0}
@@ -239,7 +253,7 @@ async def get_alert_summary() -> dict:
 
     # Zone breakdown
     zone_pipeline = [
-        {"$match": {"created_at": {"$gte": today_start}}},
+        {"$match": match},
         {"$group": {"_id": "$zone", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
     ]
