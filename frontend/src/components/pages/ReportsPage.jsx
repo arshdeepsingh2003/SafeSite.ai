@@ -519,7 +519,7 @@ export default function ReportsPage() {
 
           {/* Table header */}
           <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 90px 160px 140px 130px 100px',
+            display: 'grid', gridTemplateColumns: '1fr 90px 160px 140px 130px 140px',
             padding: '10px 20px', borderBottom: '1px solid var(--border)',
             fontSize: '11px', color: '#8b949e', fontWeight: '600', textTransform: 'uppercase',
           }}>
@@ -545,7 +545,7 @@ export default function ReportsPage() {
                 key={r.id}
                 onClick={() => handleSelectReport(r)}
                 style={{
-                  display: 'grid', gridTemplateColumns: '1fr 90px 160px 140px 130px 100px',
+                  display: 'grid', gridTemplateColumns: '1fr 90px 160px 140px 130px 140px',
                   padding: '13px 20px', borderBottom: '1px solid var(--border)',
                   cursor: 'pointer', alignItems: 'center',
                   background: isSelected ? 'rgba(99,102,241,0.06)' : 'transparent',
@@ -572,7 +572,17 @@ export default function ReportsPage() {
                   {r.generated_on ? new Date(r.generated_on).toLocaleString() : '—'}
                 </div>
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleSelectReport(r) }}
+                    style={{
+                      padding: '4px 8px', fontSize: '11px', fontWeight: '600',
+                      background: isSelected ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.1)',
+                      border: '1px solid rgba(99,102,241,0.3)',
+                      borderRadius: '6px', color: '#818cf8', cursor: 'pointer',
+                    }}
+                    title="Preview"
+                  >Preview</button>
                   <button
                     onClick={e => { e.stopPropagation(); downloadReport(r.id, r.name) }}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '15px' }}

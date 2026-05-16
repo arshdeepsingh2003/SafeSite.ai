@@ -1,8 +1,10 @@
 # SafeSite AI — Construction Site Safety Monitoring System
 
-**Version 13.0.0 — Analytics Phase**
+**Version 14.0.0 — Live Data & IST Phase**
 
 SafeSite AI is a real-time construction site safety monitoring platform that uses computer vision (YOLOv11) and LLM-powered analytics to detect PPE (Personal Protective Equipment) violations. It processes uploaded videos or live HLS streams, identifies workers without hard hats or safety vests, generates instant alerts (via WebSocket), sends email notifications for high-severity violations, and produces AI-driven safety reports.
+
+> **Time Zone:** All timestamps use **IST (Indian Standard Time, UTC+5:30)** throughout the entire stack.
 
 ---
 
@@ -25,11 +27,11 @@ SafeSite AI is a real-time construction site safety monitoring platform that use
 
 ### Components
 
-| Service     | Tech Stack                                                    | Port  |
-|-------------|---------------------------------------------------------------|-------|
-| **Frontend**  | React 19, Vite 8, Tailwind CSS 3, Socket.IO Client, Recharts | 5173  |
-| **Backend**   | FastAPI, Motor (MongoDB), Socket.IO, JWT, Groq SDK            | 8000  |
-| **AI Service** | Ultralytics YOLOv11, PyTorch, OpenCV, NumPy                 | —     |
+| Service     | Tech Stack                                                               | Port  |
+|-------------|--------------------------------------------------------------------------|-------|
+| **Frontend**  | React 19, Vite 8, Tailwind CSS 3, Socket.IO Client, Recharts, Lucide  | 5173  |
+| **Backend**   | FastAPI, Motor (MongoDB), Socket.IO, JWT, Groq SDK                      | 8000  |
+| **AI Service** | Ultralytics YOLOv11, PyTorch, OpenCV, NumPy                           | —     |
 
 ---
 
@@ -117,8 +119,11 @@ pip install -r requirements.txt
 # Create the default admin user (reads ADMIN_* from .env)
 python create_admin.py
 
-# (Optional) Seed 25 sample alerts for testing the dashboard
-python seed_alerts.py
+# (Optional) Seed sample data for testing
+python seed_alerts.py          # 25 sample alerts
+python seed_analytics.py       # Sample analytics aggregations
+python seed_reports.py         # Sample generated reports
+python seed_sites_workers.py   # Sample sites and workers
 ```
 
 #### 2d. Start the Backend
@@ -229,6 +234,14 @@ npm run dev
 
 The frontend is now running at **http://localhost:5173**.
 
+#### 4d. (Optional) Install Lucide Icons
+
+If the frontend fails to start due to missing icons:
+
+```bash
+npm install lucide-react
+```
+
 ---
 
 ### 5. Login
@@ -311,31 +324,40 @@ Open **http://localhost:5173** and sign in with the admin credentials from your 
 | Start server           | `uvicorn main:socket_app --reload --port 8000` | Development server with hot reload |
 | Create admin user      | `python create_admin.py`                  | Seed default admin in MongoDB  |
 | Seed sample alerts     | `python seed_alerts.py`                   | Insert 25 test alerts          |
+| Seed analytics         | `python seed_analytics.py`                | Insert sample analytics data   |
+| Seed reports           | `python seed_reports.py`                  | Insert sample generated reports|
+| Seed sites & workers   | `python seed_sites_workers.py`            | Insert sample sites/workers    |
 
 ### AI Service
 
 | Script                 | Command                                                      | Description                     |
 |------------------------|--------------------------------------------------------------|---------------------------------|
 | Verify setup           | `python hello.py`                                            | Check environment and imports   |
-| Run detection          | `python detect.py --video <path> --video_id <id> --zone "Zone A"` | Process a video for violations |
+| Run detection (video)  | `python detect.py --video <path> --video_id <id> --zone "Zone A"` | Process a video for violations |
+| Run detection (stream) | `python stream_detect.py --stream <hls-url> --zone "Zone A"` | Process a live HLS stream       |
+| Debug detections       | `python debug_ppe.py`                                        | Test PPE detection with debug output |
+| Run tests              | `python test_detection.py`                                   | Run detection test suite        |
 
 ---
 
 ## API Overview
 
-| Endpoint Group | Prefix          | Description                           |
-|----------------|-----------------|---------------------------------------|
-| Authentication | `/auth`         | Login, register, JWT token management |
-| Videos         | `/video`        | Upload, list, delete videos & streams |
-| AI Analysis    | `/ai`           | Trigger analysis, receive results     |
-| Alerts         | `/alerts`       | CRUD alerts, resolve, summary         |
-| Dashboard      | `/dashboard`    | Stats, hourly trends, zone breakdown  |
-| Analytics      | `/analytics`    | Daily/weekly trends, violation breakdown |
-| Reports        | `/reports`      | Generate & download AI safety reports |
-| LLM Insights   | `/llm`          | Groq-powered safety insights          |
-| Email          | `/email`        | Email config, test alerts             |
-| Proxy          | `/proxy`        | HLS stream proxy (CORS avoidance)     |
-| Health         | `/health`       | Health check endpoint                 |
+| Endpoint Group    | Prefix            | Description                              |
+|-------------------|-------------------|------------------------------------------|
+| Authentication    | `/auth`           | Login, register, JWT token management    |
+| Videos            | `/video`          | Upload, list, delete videos & streams    |
+| AI Analysis       | `/ai`             | Trigger analysis, receive results        |
+| Alerts            | `/alerts`         | CRUD alerts, resolve, summary (date filter, exclude resolved) |
+| Dashboard         | `/dashboard`      | Stats, hourly trends, zone breakdown     |
+| Analytics         | `/analytics`      | Daily/weekly trends, violation breakdown, zone summary, detection summary |
+| Reports           | `/reports`        | Generate & download AI safety reports (range/zone filtering) |
+| LLM Insights      | `/llm`            | Groq-powered safety insights             |
+| Email             | `/email`          | Email config, test alerts                |
+| Proxy             | `/proxy`          | HLS stream proxy (CORS avoidance)        |
+| Live Detection    | `/live-detection` | Real-time frame analysis results         |
+| Upload Insights   | `/upload-insights`| Insights from video upload analysis      |
+| Socket Test       | `/socket-test`    | WebSocket connectivity test              |
+| Health            | `/health`         | Health check endpoint                    |
 
 Full interactive API documentation is available at **http://localhost:8000/docs** when the backend is running.
 
@@ -372,11 +394,12 @@ Collections are created automatically on first write. No migration step is requi
 |--------------|--------------------------------------|
 | `users`      | User accounts (name, email, hashed password, role) |
 | `videos`     | Uploaded videos and live HLS streams |
-| `alerts`     | Safety violation alerts with severity, zone, timestamps |
-| `sites`      | Construction sites (stub)            |
-| `workers`    | Workers (stub)                       |
+| `alerts`     | Safety violation alerts with severity, zone, timestamps, worker_id |
+| `sites`      | Construction sites (camera count, active status) |
+| `reports`    | Generated AI safety reports (stats, top zones, LLM summary) |
 | `settings`   | Application settings (e.g. alert cooldown) |
-| `reports`    | Generated AI safety reports          |
+
+> **Note:** There is no dedicated `workers` collection. Worker counts are derived from distinct `worker_id` values in the `alerts` collection.
 
 ---
 
@@ -411,45 +434,72 @@ Frontend                  Backend                   AI Service
 
 ```
 SafeSite.ai/
-├── frontend/                  # React + Vite dashboard
+├── frontend/                     # React + Vite dashboard
 │   ├── src/
-│   │   ├── components/        # Reusable UI components
-│   │   ├── pages/             # Page-level components
-│   │   ├── services/          # API client (Axios)
-│   │   └── App.jsx            # Root component
-│   ├── .env                   # Frontend environment
+│   │   ├── components/
+│   │   │   ├── layout/           # AppLayout, Sidebar, ProtectedRoute
+│   │   │   ├── pages/            # Dashboard, Alerts, Reports, VideoUpload, LiveMonitoring, Login
+│   │   │   └── ui/               # AIInsightPanel, LiveAIInsight, AnalysisResultCard, etc.
+│   │   ├── context/              # Auth, Socket, Sound, Stream, Alert, UploadInsight
+│   │   ├── hooks/                # useAlerts, useReports, useAnalytics, useLLM, etc.
+│   │   ├── services/             # API client (Axios), Socket.IO, soundService, hlsProxy
+│   │   ├── App.jsx               # Root component with routing
+│   │   └── main.jsx              # Entry point
+│   ├── .env                      # Frontend environment
 │   ├── package.json
 │   └── vite.config.js
 │
-├── backend/                   # FastAPI server
-│   ├── routes/                # API route handlers
-│   │   ├── auth.py
-│   │   ├── video.py
-│   │   ├── ai_results.py
-│   │   ├── alerts.py
-│   │   ├── dashboard.py
-│   │   ├── analytics.py
-│   │   ├── reports.py
-│   │   ├── llm.py
-│   │   ├── email.py
-│   │   └── proxy.py
-│   ├── main.py                # ASGI entry point
-│   ├── database.py            # MongoDB connection
-│   ├── models.py              # Pydantic schemas
-│   ├── socket_setup.py        # Socket.IO configuration
-│   ├── create_admin.py        # Admin seeder
-│   ├── seed_alerts.py         # Alert seeder
-│   ├── .env                   # Backend environment
+├── backend/                      # FastAPI server
+│   ├── routes/
+│   │   ├── auth.py               # JWT authentication
+│   │   ├── video.py              # Video upload & management
+│   │   ├── ai_results.py         # AI analysis results
+│   │   ├── alerts.py             # CRUD alerts, date filtering, summary
+│   │   ├── dashboard.py          # Dashboard stats & trends
+│   │   ├── analytics.py          # Analytics (trend, by-zone, compliance, heatmap)
+│   │   ├── reports.py            # Generate & download safety reports
+│   │   ├── llm.py                # Groq LLM insights
+│   │   ├── email.py              # Email alert configuration
+│   │   ├── proxy.py              # HLS stream proxy (CORS)
+│   │   ├── live_detection.py     # Real-time detection results
+│   │   ├── upload_insights.py    # Upload analysis insights
+│   │   └── socket_test.py        # WebSocket test endpoint
+│   ├── models/
+│   │   ├── alert.py              # Alert: created_at (IST), zone, severity, worker_id
+│   │   ├── user.py               # User: email, hashed password, role
+│   │   └── video.py              # Video: filename, status, uploaded_at (IST)
+│   ├── services/
+│   │   ├── alert_service.py      # Alert query logic (exclude resolved, date filter)
+│   │   ├── auth_service.py       # JWT creation & verification
+│   │   ├── email_service.py      # SMTP email dispatch
+│   │   └── groq_service.py       # Groq LLM client
+│   ├── analytics/
+│   │   └── aggregate_detections.py  # Periodic detection aggregation
+│   ├── main.py                   # ASGI entry point (FastAPI + Socket.IO)
+│   ├── database.py               # MongoDB connection via Motor
+│   ├── socket_server.py          # Socket.IO server setup & events
+│   ├── time_utils.py             # IST helper (utc+5:30)
+│   ├── create_admin.py           # Admin user seeder
+│   ├── seed_alerts.py            # Sample alerts seeder
+│   ├── seed_analytics.py         # Sample analytics seeder
+│   ├── seed_reports.py           # Sample reports seeder
+│   ├── seed_sites_workers.py     # Sample sites seeder
+│   ├── .env                      # Backend environment
 │   └── requirements.txt
 │
-├── ai-service/                # AI detection engine
+├── ai-service/                   # AI detection engine
 │   ├── utils/
-│   │   ├── violation_detector.py  # Core PPE detection logic
-│   │   └── frame_annotator.py     # Bounding box drawing
-│   ├── model/                 # YOLO model weights (gitignored)
-│   ├── detect.py              # Main detection script
-│   ├── hello.py               # Environment verification
-│   ├── .env                   # AI service environment
+│   │   ├── __init__.py
+│   │   ├── violation_detector.py # Core PPE detection logic
+│   │   └── frame_annotator.py    # Bounding box drawing
+│   ├── model/                    # YOLO model weights (gitignored)
+│   ├── detect.py                 # Video file detection
+│   ├── stream_detect.py          # Live HLS stream detection
+│   ├── debug_ppe.py              # Debug/testing PPE detection
+│   ├── test_detection.py         # Detection test suite
+│   ├── hello.py                  # Environment verification
+│   ├── time_utils.py             # IST helper for AI service
+│   ├── .env                      # AI service environment
 │   └── requirements.txt
 │
 ├── .gitignore
@@ -479,6 +529,9 @@ SafeSite.ai/
 | `torch` / `torchvision` installation fails | Install PyTorch separately from https://pytorch.org (CUDA vs CPU) |
 | Socket.IO not connecting       | Ensure backend is started with `main:socket_app` (not `main:app`) |
 | Email alerts not sending       | Verify `MAIL_PASSWORD` is a Gmail App Password (not the account password) |
+| Reports show no data           | Check report type range — daily = last 24h, week = last 7d, month = last 30d |
+| Alert counts seem low          | Resolved alerts are excluded from all summary counts by default |
+| Times appear off by 5:30       | All timestamps are **IST (UTC+5:30)** — not UTC |
 
 ---
 

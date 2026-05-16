@@ -5,10 +5,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  LineChart, Line, AreaChart, Area,
+  LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, CartesianGrid,
 } from 'recharts'
+import { AlertTriangle, FileText, Bot } from 'lucide-react'
 import { useAuth }          from '../../context/AuthContext'
 import { useSocket }        from '../../context/SocketContext'
 import { useSoundSettings } from '../../context/SoundContext'
@@ -304,7 +305,7 @@ export default function DashboardPage() {
   const [trend,         setTrend]         = useState([])
   const [byZone,        setByZone]        = useState({ zones:[], grand_total:0 })
   const [heatmap,       setHeatmap]       = useState({ heatmap:[], days:[], buckets:[], max_count:1 })
-  const [compTrend,     setCompTrend]     = useState([])
+
   const [zoneSummary,   setZoneSummary]   = useState([])
   const [detectionSum,  setDetectionSum]  = useState(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
@@ -344,12 +345,11 @@ export default function DashboardPage() {
       api.get(`/analytics/trend?range=${range}&granularity=${trendGranRef.current}&zone=${zone}`),
       api.get(`/analytics/by-zone?range=${range}&zone=${zone}`),
       api.get(`/analytics/by-time-of-day?range=${range}&zone=${zone}`),
-      api.get(`/analytics/compliance-trend?range=${range}&zone=${zone}`),
       api.get(`/analytics/zone-summary?range=${range}&zone=${zone}`),
       api.get(`/analytics/detection-summary?range=${range}&zone=${zone}`),
     ])
 
-    const [sRes, tRes, zRes, hRes, cRes, zsRes, dRes] = results
+    const [sRes, tRes, zRes, hRes, zsRes, dRes] = results
 
     const errors = results.filter(r => r.status === 'rejected')
     if (errors.length > 0) {
@@ -363,7 +363,6 @@ export default function DashboardPage() {
     if (tRes.status === 'fulfilled') setTrend(tRes.value.data.data || [])
     if (zRes.status === 'fulfilled') setByZone(zRes.value.data)
     if (hRes.status === 'fulfilled') setHeatmap(hRes.value.data)
-    if (cRes.status === 'fulfilled') setCompTrend(cRes.value.data.weeks || [])
     if (zsRes.status === 'fulfilled') setZoneSummary(zsRes.value.data.rows || [])
     if (dRes.status === 'fulfilled') setDetectionSum(dRes.value.data)
 
@@ -712,7 +711,7 @@ export default function DashboardPage() {
             </div>
           ) : insightLoad ? (
             <div style={{ fontSize:'12px', color:'#8b949e', textAlign:'center', padding:'20px' }}>
-              <div style={{ fontSize:'24px', marginBottom:'8px' }}>\uD83E\uDD16</div>
+              <Bot size={32} style={{ marginBottom:'8px' }} />
               Generating insights\u2026
             </div>
           ) : insight ? (
@@ -724,7 +723,7 @@ export default function DashboardPage() {
                   background: insight.risk_level === 'high' ? 'rgba(239,68,68,0.15)' : insight.risk_level === 'medium' ? 'rgba(234,179,8,0.15)' : 'rgba(34,197,94,0.15)',
                   color:      insight.risk_level === 'high' ? '#ef4444'              : insight.risk_level === 'medium' ? '#eab308'              : '#22c55e',
                 }}>
-                  \u25CF {insight.risk_level.toUpperCase()} RISK
+                  {insight.risk_level.toUpperCase()} RISK
                 </div>
               )}
               <p style={{ fontSize:'13px', color:'#c9d1d9', lineHeight:'1.7', marginBottom:'12px' }}>
@@ -738,7 +737,7 @@ export default function DashboardPage() {
                   border: insight.risk_level === 'high' ? '1px solid rgba(239,68,68,0.2)' : insight.risk_level === 'medium' ? '1px solid rgba(234,179,8,0.2)' : '1px solid rgba(34,197,94,0.2)',
                   borderRadius:'8px', fontSize:'12px',
                 }}>
-                  <span style={{ flexShrink:0, fontSize:'14px' }}>\u26A0\uFE0F</span>
+                  <span style={{ flexShrink:0, display:'flex' }}><AlertTriangle size={16} /></span>
                   <div>
                     <div style={{ fontWeight:'700', color: '#e6edf3', marginBottom:'2px' }}>Top Concern</div>
                     <div style={{ color:'#8b949e' }}>{insight.top_concern}</div>
@@ -746,11 +745,12 @@ export default function DashboardPage() {
                 </div>
               )}
               <a href="/reports" style={{
-                display:'block', marginTop:'12px', padding:'7px',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+                marginTop:'12px', padding:'7px',
                 textAlign:'center', background:'rgba(99,102,241,0.1)',
                 border:'1px solid rgba(99,102,241,0.3)', borderRadius:'7px',
                 color:'#818cf8', fontSize:'12px', fontWeight:'600', textDecoration:'none',
-              }}>\uD83D\uDCC4 View Detailed Report</a>
+              }}><FileText size={14} /> View Detailed Report</a>
             </>
           ) : (
             <div style={{ fontSize:'12px', color:'#8b949e', textAlign:'center', padding:'20px' }}>
@@ -767,43 +767,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          6+8. Compliance Charts + Heatmap (2-col)
-          ══════════════════════════════════════════════════════ */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', marginBottom:'16px' }}>
-
-        {/* ── Compliance Rate Over Time ── */}
-        <SectionCard title="Compliance Rate Over Time">
-          {analyticsLoading || compTrend.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'30px', color:'#8b949e', fontSize:'12px' }}>
-              {analyticsLoading ? 'Loading\u2026' : 'No compliance trend data yet'}
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={compTrend}>
-                <defs>
-                  <linearGradient id="compGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize:10, fill:'#8b949e' }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0,100]} tick={{ fontSize:10, fill:'#8b949e' }} axisLine={false} tickLine={false}
-                  tickFormatter={v => `${v}%`} />
-                <Tooltip
-                  contentStyle={{ background:'#1f2937', border:'1px solid #30363d', borderRadius:'8px', fontSize:'12px' }}
-                  formatter={v => [`${v}%`, 'Compliance']}
-                />
-                <Area type="monotone" dataKey="compliance_rate" stroke="#22c55e" fill="url(#compGrad)"
-                  strokeWidth={2} dot={{ fill:'#22c55e', r:4 }} name="Compliance Rate"
-                  label={{ position:'top', fontSize:10, fill:'#22c55e', formatter: v => `${v}%` }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </SectionCard>
-
-        {/* ── Violations by Time of Day (Heatmap) ── */}
+           6. Violations by Time of Day (Heatmap)
+           ══════════════════════════════════════════════════════ */}
+      <div style={{ marginBottom:'16px' }}>
         <SectionCard title="Violations by Time of Day">
           {analyticsLoading ? (
             <div style={{ textAlign:'center', padding:'30px', color:'#8b949e' }}>Loading\u2026</div>
@@ -816,7 +782,6 @@ export default function DashboardPage() {
             />
           )}
         </SectionCard>
-
       </div>
 
       {/* ══════════════════════════════════════════════════════
