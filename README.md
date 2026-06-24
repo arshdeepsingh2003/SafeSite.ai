@@ -8,6 +8,30 @@ SafeSite AI is a real-time construction site safety monitoring platform that use
 
 ---
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+  - [1. Clone & Prepare](#1-clone--prepare)
+  - [2. Backend Setup](#2-backend-setup)
+  - [3. AI Service Setup](#3-ai-service-setup)
+  - [4. Frontend Setup](#4-frontend-setup)
+  - [5. Login](#5-login)
+- [Environment Variables Reference](#environment-variables-reference)
+- [Available Scripts](#available-scripts)
+- [API Overview](#api-overview)
+- [WebSocket Events (Socket.IO)](#websocket-events-socketio)
+- [Database (MongoDB)](#database-mongodb)
+- [Data Flow](#data-flow)
+- [Project Structure](#project-structure)
+- [Order of Startup](#order-of-startup)
+- [Security Notes](#security-notes)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
 ## Architecture
 
 ```
@@ -37,22 +61,36 @@ SafeSite AI is a real-time construction site safety monitoring platform that use
 
 ## Prerequisites
 
-- **Node.js** 18+ and **npm** 9+
-- **Python** 3.10+
-- **MongoDB** instance — [MongoDB Atlas](https://www.mongodb.com/atlas) (free tier) or local MongoDB
-- **(Optional)** [Groq API key](https://console.groq.com) — for LLM-generated safety reports
-- **(Optional)** Gmail account with an [App Password](https://support.google.com/accounts/answer/185833) — for email alert notifications
+Before starting, make sure the following are installed on your machine.
+
+| Requirement     | Minimum Version | Check Command             |
+|----------------|-----------------|---------------------------|
+| **Node.js**    | 18+             | `node -v`                 |
+| **npm**        | 9+              | `npm -v`                  |
+| **Python**     | 3.10+           | `python --version`        |
+| **pip**        | (comes with Python) | `pip --version`       |
+| **Git**        | Any recent      | `git --version`           |
+
+### External Services (Required)
+
+| Service | Purpose | Setup |
+|---------|---------|-------|
+| **MongoDB** — [Atlas (free tier)](https://www.mongodb.com/atlas) or local | Database | Create a cluster, get your connection string |
+| **(Optional) Groq** — [API Key](https://console.groq.com) | LLM safety reports | Generate a key at console.groq.com |
+| **(Optional) Gmail** — [App Password](https://support.google.com/accounts/answer/185833) | Email alerts | Enable 2FA, generate an app password |
 
 ---
 
 ## Quick Start
 
-### 1. Clone the Repository
+### 1. Clone & Prepare
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/<your-org>/SafeSite.ai.git
 cd SafeSite.ai
 ```
+
+> **Windows users:** Run all terminals as **PowerShell** or **Command Prompt**. Paths use backslashes; adapt scripts accordingly.
 
 ---
 
@@ -67,11 +105,12 @@ cd backend
 Create `backend/.env` with the following variables:
 
 ```env
-# --- MongoDB ---
+# --- MongoDB (Required) ---
 MONGO_URL=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
 DATABASE_NAME=safesite_ai
 
-# --- JWT Authentication ---
+# --- JWT Authentication (Required) ---
+# Generate a secure key: run `python -c "import secrets; print(secrets.token_hex(32))"`
 SECRET_KEY=<your-random-64-char-secret>
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
@@ -99,21 +138,27 @@ ADMIN_PASSWORD=<choose-a-strong-password>
 ADMIN_NAME=Site Admin
 ```
 
-#### 2b. Install Dependencies
+> **Generating a SECRET_KEY:** Run `python -c "import secrets; print(secrets.token_hex(32))"` to generate a secure 64-character random string.
+
+#### 2b. Create a Virtual Environment (Recommended)
+
+```bash
+# Windows
+python -m venv venv
+.\venv\Scripts\activate
+
+# macOS / Linux
+python3 -m venv venv
+source venv/bin/activate
+```
+
+#### 2c. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> **Tip:** Use a virtual environment:
-> ```bash
-> python -m venv venv
-> venv\Scripts\activate   # Windows
-> source venv/bin/activate  # macOS/Linux
-> pip install -r requirements.txt
-> ```
-
-#### 2c. Seed the Database
+#### 2d. Seed the Database
 
 ```bash
 # Create the default admin user (reads ADMIN_* from .env)
@@ -126,21 +171,24 @@ python seed_reports.py         # Sample generated reports
 python seed_sites_workers.py   # Sample sites and workers
 ```
 
-#### 2d. Start the Backend
+#### 2e. Start the Backend
 
 ```bash
 uvicorn main:socket_app --reload --port 8000
 ```
 
-The backend is now running at **http://localhost:8000**  
-API docs (Swagger UI) at **http://localhost:8000/docs**  
-Socket.IO endpoint at **ws://localhost:8000/socket.io**
+**Verify it's running:**
+- API: http://localhost:8000
+- Swagger Docs: http://localhost:8000/docs
+- Health Check: http://localhost:8000/health
+
+> Keep this terminal running. Open a **new terminal** for the next steps.
 
 ---
 
 ### 3. AI Service Setup
 
-Open a **new terminal**.
+Open a **new terminal** in the project root.
 
 ```bash
 cd ai-service
@@ -169,14 +217,13 @@ DEBUG_DETECTIONS=true
 pip install -r requirements.txt
 ```
 
+> **PyTorch Troubleshooting:** If `torch` installation fails, install it manually from [pytorch.org](https://pytorch.org) (choose the correct CUDA or CPU version for your system).
+
 #### 3c. Download the PPE Model
 
-The recommended model is `yolo11m_safety.pt` from Hugging Face with classes: `hat`, `nohat`, `novest`, `person`, `vest`.
-
-Download and place it at `ai-service/model/ppe_model.pt`:
+The recommended model is `yolo11m_safety.pt` with classes: `hat`, `nohat`, `novest`, `person`, `vest`.
 
 ```bash
-cd ai-service
 python -c "
 from huggingface_hub import hf_hub_download
 import shutil
@@ -206,7 +253,7 @@ In normal operation, the backend automatically spawns the AI service when a user
 
 ### 4. Frontend Setup
 
-Open a **new terminal**.
+Open a **new terminal** in the project root.
 
 ```bash
 cd frontend
@@ -232,15 +279,7 @@ npm install
 npm run dev
 ```
 
-The frontend is now running at **http://localhost:5173**.
-
-#### 4d. (Optional) Install Lucide Icons
-
-If the frontend fails to start due to missing icons:
-
-```bash
-npm install lucide-react
-```
+**Verify it's running:** Open http://localhost:5173 in your browser.
 
 ---
 
@@ -252,6 +291,20 @@ Open **http://localhost:5173** and sign in with the admin credentials from your 
 |----------|---------------------------------|
 | Email    | `safety_admin@safesiteai.com`   |
 | Password | *(the password you set above)*  |
+
+---
+
+## Order of Startup
+
+To run the full stack, start these **3 terminals** in order:
+
+| Order | Service    | Command                                                    | URL                    |
+|-------|------------|------------------------------------------------------------|------------------------|
+| 1     | **Backend**  | `cd backend && uvicorn main:socket_app --reload --port 8000`  | http://localhost:8000  |
+| 2     | **AI Service** | *(auto-started by backend when analysis is triggered)*     | —                      |
+| 3     | **Frontend**  | `cd frontend && npm run dev`                                | http://localhost:5173  |
+
+The AI Service is automatically spawned by the backend when you upload a video and click "Analyze" — you don't need to run it manually for normal operation.
 
 ---
 
@@ -359,7 +412,7 @@ Open **http://localhost:5173** and sign in with the admin credentials from your 
 | Socket Test       | `/socket-test`    | WebSocket connectivity test              |
 | Health            | `/health`         | Health check endpoint                    |
 
-Full interactive API documentation is available at **http://localhost:8000/docs** when the backend is running.
+> Full interactive API documentation is available at **http://localhost:8000/docs** when the backend is running.
 
 ---
 
@@ -511,7 +564,7 @@ SafeSite.ai/
 ## Security Notes
 
 - **All `.env` files are gitignored.** Never commit secrets to version control.
-- The JWT `SECRET_KEY` in `backend/.env` should be a long, cryptographically random string. **Do not use the example value in production.**
+- The JWT `SECRET_KEY` in `backend/.env` should be a long, cryptographically random string. Generate one with `python -c "import secrets; print(secrets.token_hex(32))"`. **Do not use the example value in production.**
 - The MongoDB connection string in `MONGO_URL` includes credentials. Use a dedicated database user with minimal required permissions.
 - The Gmail App Password (`MAIL_PASSWORD`) grants access to the associated Google account. Rotate it regularly.
 - For production deployments, use environment variables or a secrets manager (e.g., HashiCorp Vault, AWS Secrets Manager) instead of `.env` files.
@@ -532,6 +585,7 @@ SafeSite.ai/
 | Reports show no data           | Check report type range — daily = last 24h, week = last 7d, month = last 30d |
 | Alert counts seem low          | Resolved alerts are excluded from all summary counts by default |
 | Times appear off by 5:30       | All timestamps are **IST (UTC+5:30)** — not UTC |
+| `pip install` fails for `uvicorn` | Upgrade pip: `python -m pip install --upgrade pip` |
 
 ---
 
